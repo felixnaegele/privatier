@@ -148,3 +148,17 @@ def test_network_blocked_while_processing():
     with offline():
         with pytest.raises(OSError):
             socket.create_connection(("example.com", 443), timeout=1)
+
+
+def test_failed_ai_model_leaves_nothing_behind(tmp_path, monkeypatch):
+    import privatier.engine as engine
+
+    def broken(use_ai):
+        raise RuntimeError("model could not be loaded")
+
+    monkeypatch.setattr(engine, "build_detectors", broken)
+    src = make(tmp_path / "Studie")
+    with pytest.raises(RuntimeError):
+        anonymize_folder(src, PASSWORD, use_ai=True)
+    assert not (tmp_path / "Studie_anonymized").exists()
+    assert not (tmp_path / "Studie_privatier").exists()

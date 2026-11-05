@@ -21,7 +21,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # Local AI name recognition (GLiNER). Large download (PyTorch); recommended on Apple Silicon / modern laptops.
-ai = ["gliner>=0.2.13"]
+ai = ["gliner>=0.2.13", "protobuf>=4"]
 dev = ["pytest>=8", "reportlab>=4"]
 
 [project.scripts]
