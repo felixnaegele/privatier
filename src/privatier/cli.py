@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import getpass
 import os
 import sys
@@ -44,6 +45,22 @@ def _refuse_existing(folder: Path) -> None:
         )
 
 
+def _grouped_questions(warnings: list[tuple[str, str]]) -> list[str]:
+    """One line per kind of question, however many people it is about. The full list is in the audit log."""
+    groups: dict[str, list[tuple[str, str]]] = {}
+    for file, note in warnings:
+        groups.setdefault(re.sub(r"'[^']*'|[A-Z]+_\d+(?:_[A-Z]\d*)?(?:, [A-Z]+_\d+(?:_[A-Z]\d*)?)*|\b\d+\b", "#", note), []).append((file, note))
+    lines = []
+    for items in groups.values():
+        file, note = items[0]
+        if len(items) == 1:
+            lines.append(f"{file}: {note}")
+        else:
+            files = len({f for f, _ in items})
+            lines.append(f"{len(items)} times in {files} file(s), e.g. {file}: {note}")
+    return lines
+
+
 def _print_summary(title: str, s) -> None:
     print(f"\n{title}")
     print(f"  Output folder: {s.output_dir}")
@@ -58,10 +75,14 @@ def _print_summary(title: str, s) -> None:
         print(f"\n  Errors (NOT copied to the output) - {len(s.errors)}:")
         for f, err in s.errors:
             print(f"    - {f}: {err}")
+    for note in getattr(s, "notes", []):
+        print(f"\n  Note: {note}")
     if s.warnings:
         print("\n  Please check:")
-        for f, w in s.warnings:
-            print(f"    - {f}: {w}")
+        for line in _grouped_questions(s.warnings):
+            print(f"    - {line}")
+        if any(" may be " in w or "may belong to" in w or "may refer to" in w for _, w in s.warnings):
+            print("\n  If an identical name always means the same person in your data, run again with --link-by-name.")
     if getattr(s, "unknown_tokens", None):
         print("\n  Tokens not found in the key (left unchanged): " + ", ".join(sorted(s.unknown_tokens)))
 
@@ -76,6 +97,11 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--output", type=Path, help="where to write the anonymised copy")
     a.add_argument("--key-dir", type=Path, help="where to keep key file and audit log (keep private!)")
     a.add_argument("--ai", action="store_true", help="also use the local AI model for name recognition")
+    a.add_argument(
+        "--link-by-name",
+        action="store_true",
+        help="treat an identical name as the same person when no birth date or ID says otherwise",
+    )
 
     r = sub.add_parser("restore", help="put real values back into files that contain tokens")
     r.add_argument("folder", type=Path)
@@ -99,6 +125,7 @@ def main(argv: list[str] | None = None) -> int:
                 output_dir=args.output,
                 work_dir=args.key_dir,
                 use_ai=args.ai,
+                link_by_name=args.link_by_name,
             )
             _print_summary("Anonymisation finished.", summary)
             work = (args.key_dir or default_work).resolve()
@@ -111,6 +138,12 @@ def main(argv: list[str] | None = None) -> int:
             pseudo = Pseudonymizer.from_dict(load_vault(args.key, _password(confirm=False)))
             for e in pseudo.to_dict()["entries"]:
                 print(f"{e['token']}\t{e['original']}")
+            if pseudo.people:
+                print("\nPeople (full birth dates are only stored here):")
+                for p in pseudo.people:
+                    births = ", ".join(b["raw"] for b in p["births"]) or "-"
+                    ids = ", ".join(value for _, value in p["ids"]) or "-"
+                    print(f"{p['token']}\t{p['canonical']}\tborn: {births}\tIDs: {ids}")
         elif args.command == "setup-ai":
             from .detect.gliner_detector import DEFAULT_MODEL, download_model, is_available
 

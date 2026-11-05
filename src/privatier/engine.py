@@ -22,7 +22,7 @@ from pathlib import Path
 from .audit import AuditLog, sha256
 from .detect import PatternDetector
 from .handlers import handler_for
-from .pseudonyms import Pseudonymizer
+from .pseudonyms import KnownValueDetector, Pseudonymizer
 from .transform import Anonymizer, Restorer, Transformer
 from .vault import load_vault, save_vault
 
@@ -37,6 +37,7 @@ class Summary:
     skipped: list[tuple[str, str]] = field(default_factory=list)
     errors: list[tuple[str, str]] = field(default_factory=list)
     warnings: list[tuple[str, str]] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)  # for information, nothing to decide
     counts: Counter[str] = field(default_factory=Counter)
     unknown_tokens: Counter[str] = field(default_factory=Counter)
 
@@ -86,9 +87,9 @@ def _list_files(root: Path) -> list[Path]:
 
 def _output_rel_path(rel: Path, out_name: str, t: Transformer) -> Path:
     """File and folder names can contain names too ("Arztbrief_Mueller.docx")."""
-    parts = [t.text(p) for p in rel.parent.parts]
+    parts = [t.file_name(p) for p in rel.parent.parts]
     stem, dot, ext = out_name.partition(".")
-    return Path(*parts, t.text(stem) + dot + ext)
+    return Path(*parts, t.file_name(stem) + dot + ext)
 
 
 def _unique(path: Path) -> Path:
@@ -120,6 +121,7 @@ def anonymize_folder(
     work_dir: Path | None = None,
     use_ai: bool = False,
     detectors: list | None = None,
+    link_by_name: bool = False,
 ) -> Summary:
     input_dir = Path(input_dir).resolve()
     default_out, default_work = default_paths(input_dir)
@@ -143,7 +145,7 @@ def anonymize_folder(
         with offline():  # the AI model must load from disk only
             detectors = build_detectors(use_ai)
     work_dir.mkdir(parents=True, exist_ok=True)  # only once everything is ready
-    anon = Anonymizer(pseudo, detectors)
+    anon = Anonymizer(pseudo, detectors, link_by_name)
     audit = AuditLog(work_dir / AUDIT_FILE)
     summary = Summary(output_dir)
     files = _list_files(input_dir)
@@ -156,31 +158,45 @@ def anonymize_folder(
     )
 
     with offline():
-        # Pass 1: collect sensitive values.
+        # Pass 1: collect sensitive values and the evidence about who is who.
         for path in files:
             handler = handler_for(path)
             if handler is None:
                 continue
-            anon.text(path.stem)
+            anon.current_file = str(path.relative_to(input_dir))
             try:
                 handler.process(path, None, anon)
             except Exception:
                 pass  # reported in pass 2
-        anon.enable_known_values()
+        anon.finish_collecting()
+        project_review = [("(whole project)", note) for note in dict.fromkeys(anon.registry.review)]
+        summary.warnings.extend(project_review)
+        for file, note in project_review:
+            audit.write("identity_review", file=file, note=note)
+        for note in dict.fromkeys(anon.registry.settled):
+            audit.write("identity_settled", note=note)
+        known = KnownValueDetector(pseudo)
+        named = [f for f in files if known.detect(str(f.relative_to(input_dir)))]
+        if named:
+            summary.notes.append(
+                f"{len(named)} file or folder name(s) contain a name or value from the data. Names are kept on "
+                "purpose: look at them before you upload."
+            )
 
         # Pass 2: write the anonymised copy.
         output_dir.mkdir(parents=True)
         for path in files:
             rel = path.relative_to(input_dir)
             handler = handler_for(path)
+            anon.current_file = str(rel)
             if handler is None:
                 reason = f"file type '{path.suffix or '(none)'}' not supported yet"
                 summary.skipped.append((str(rel), reason))
                 audit.write("file_skipped", file=str(rel), reason=reason, sha256=sha256(path))
                 continue
             anon.reset_file_stats()
-            out_rel = _output_rel_path(rel, handler.output_name(path), anon)
-            dst = _unique(output_dir / out_rel)
+            # File and folder names stay as they are, so that people can keep track of their files.
+            dst = _unique(output_dir / rel.parent / handler.output_name(path))
             dst.parent.mkdir(parents=True, exist_ok=True)
             try:
                 handler.process(path, dst, anon)
@@ -205,6 +221,11 @@ def anonymize_folder(
                 warnings=anon.warnings,
             )
 
+    if anon.kept_date_columns:
+        summary.notes.append(
+            f"{len(anon.kept_date_columns)} date column(s) other than birth dates were kept with day and month."
+        )
+        audit.write("date_columns_kept", columns=sorted(anon.kept_date_columns))
     save_vault(key_path, pseudo.to_dict(), password)
     audit.write(
         "run_finished",
