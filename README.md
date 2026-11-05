@@ -55,6 +55,34 @@ Detection works in layers:
 4. **Known values everywhere:** anything found in step 1–3 is also replaced wherever else it appears in the
    project, e.g. a name from an Excel column that turns up in a Word letter, or in a file name.
 
+### How people are told apart
+
+A name alone does not identify anyone, so Privatier first reads the whole project and then decides who is who.
+
+| Situation | Result |
+|---|---|
+| Same name and same birth date or same ID | One person, one code |
+| Same name, different birth date | Two people, two codes, even if the birth year is the same |
+| Same name, different patient ID | Two people, two codes |
+| Same name and birth date, different patient IDs | Kept apart and flagged for you to check |
+| Same name, no birth date or ID, and only one person fits | Linked and flagged, because nothing confirms it |
+| Same name, no birth date or ID, and several people fit | Kept apart and flagged, Privatier does not guess |
+| Same name with a doctor's title (`Dr. Jürgen Weiß`) | Kept apart from a patient of that name, unless a birth date or ID in the file confirms it |
+
+- **One code per person:** `PERSON_0001` is the full name, `PERSON_0001_F` the first name, `PERSON_0001_L` the
+  surname and `PERSON_0001_V1` another spelling (`MUELLER, MAX`). Restoring gives back what was written.
+- **Spelling:** `Müller`, `MUELLER` and `Mueller` count as the same name, as do `Weiß` and `Weiss`.
+- **Case numbers** (Fallnummer) do not separate people, since one patient can have several.
+- **A surname alone** ("Herr Müller") is linked only if exactly one person in that same document fits and the
+  gender does not contradict it. Otherwise it gets a code of its own.
+- **Full birth dates** stay in the encrypted key file. `privatier show-key` lists them, and restoring puts them
+  back into a table row when that row still contains the person's code.
+- **"Please check" list:** every uncertain decision is listed at the end of a run and in the audit log, using
+  codes only, never real names. Look these up with `privatier show-key`.
+
+When in doubt Privatier keeps people apart. Wrongly merging two patients would silently corrupt your data, while
+one patient with two codes is visible and can be corrected.
+
 ### Safety features
 
 - **Local only:** Privatier blocks all network connections while it processes data.
@@ -97,6 +125,12 @@ privatier anonymize sample_project
 
 - Free-standing names in text without a title ("Schmidt kam zur Kontrolle") are only found by the local AI
   layer or if the name already appeared elsewhere in the project.
+- Two different people with the same name and birth date and no ID cannot be told apart, and count as one person.
+- Flagged people cannot be merged or split by hand yet; this is planned for the review screen.
+- A surname that is also an ordinary word (`Klein`, `Mai`) is replaced wherever it appears capitalised, even
+  when it is not the name ("im Mai"). Privatier prefers this to leaving a real name behind.
+- After restoring, a birth date can come back in a different written form (`1975-05-12` for `12.05.1975`), and
+  IDs and dates in SPSS or Excel files come back as text. The values are the same.
 - Dates other than birth dates in spreadsheet columns (admission, visit…) are kept; Privatier warns about them.
 - Old Excel `.xls`, scanned PDFs (OCR) and images are not supported yet.
 - PDFs become text files; rewriting the PDF itself is planned.
@@ -120,6 +154,7 @@ src/privatier/
   handlers/     one file per file type; add new file types here
   tables.py     recognising sensitive columns by header
   transform.py  anonymise / restore logic
+  identity.py   who is who: telling people apart by name, birth date and ID
   pseudonyms.py consistent codes, known-value propagation
   vault.py      encrypted key file
   audit.py      audit log

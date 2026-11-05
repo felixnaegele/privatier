@@ -156,23 +156,31 @@ def anonymize_folder(
     )
 
     with offline():
-        # Pass 1: collect sensitive values.
+        # Pass 1: collect sensitive values and the evidence about who is who.
         for path in files:
             handler = handler_for(path)
             if handler is None:
                 continue
+            anon.current_file = str(path.relative_to(input_dir))
             anon.text(path.stem)
+            for part in path.relative_to(input_dir).parent.parts:
+                anon.text(part)
             try:
                 handler.process(path, None, anon)
             except Exception:
                 pass  # reported in pass 2
-        anon.enable_known_values()
+        anon.finish_collecting()
+        project_review = [("(whole project)", note) for note in dict.fromkeys(anon.registry.review)]
+        summary.warnings.extend(project_review)
+        for file, note in project_review:
+            audit.write("identity_review", file=file, note=note)
 
         # Pass 2: write the anonymised copy.
         output_dir.mkdir(parents=True)
         for path in files:
             rel = path.relative_to(input_dir)
             handler = handler_for(path)
+            anon.current_file = str(rel)
             if handler is None:
                 reason = f"file type '{path.suffix or '(none)'}' not supported yet"
                 summary.skipped.append((str(rel), reason))

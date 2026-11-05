@@ -111,6 +111,12 @@ def main(argv: list[str] | None = None) -> int:
             pseudo = Pseudonymizer.from_dict(load_vault(args.key, _password(confirm=False)))
             for e in pseudo.to_dict()["entries"]:
                 print(f"{e['token']}\t{e['original']}")
+            if pseudo.people:
+                print("\nPeople (full birth dates are only stored here):")
+                for p in pseudo.people:
+                    births = ", ".join(b["raw"] for b in p["births"]) or "-"
+                    ids = ", ".join(value for _, value in p["ids"]) or "-"
+                    print(f"{p['token']}\t{p['canonical']}\tborn: {births}\tIDs: {ids}")
         elif args.command == "setup-ai":
             from .detect.gliner_detector import DEFAULT_MODEL, download_model, is_available
 

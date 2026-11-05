@@ -68,6 +68,41 @@ def looks_like_date_column(*names: str | None) -> bool:
     return any(name and _DATE_HINT.search(_norm(name)) for name in names)
 
 
+# Person columns that are about someone other than the row's patient.
+_OTHER_PERSON = re.compile(
+    r"arzt|aerztin|physician|doctor|angehoerig|kontaktperson|contact_?person|next_?of_?kin|"
+    r"unterschrift|signature|maiden|geburts_?name|maedchen"
+)
+_FIRST_NAME = re.compile(r"vorname|first_?name|given_?name|rufname")
+_LAST_NAME = re.compile(r"nachname|last_?name|surname|familienname")
+_GENDER = re.compile(r"^(geschlecht|sex|gender)$")
+# These IDs belong to one stay or case: one patient can have several without being two people.
+_VISIT_ID = re.compile(r"fall|case|aktenzeichen|visit|besuch|aufnahme|admission")
+
+
+def column_role(*names: str | None) -> str | None:
+    """What a column says about the person a row describes: first, last, full, other or gender."""
+    normalised = [_norm(name) for name in names if name]
+    if any(_GENDER.search(n) for n in normalised):
+        return "gender"
+    if any(_OTHER_PERSON.search(n) for n in normalised):
+        return "other"
+    for n in normalised:
+        if _FIRST_NAME.search(n):
+            return "first"
+        if _LAST_NAME.search(n):
+            return "last"
+    return "full"
+
+
+def is_visit_id(*names: str | None) -> bool:
+    return any(name and _VISIT_ID.search(_norm(name)) for name in names)
+
+
+def column_key(*names: str | None) -> str:
+    return next((_norm(name) for name in names if name), "")
+
+
 # Category -> entity type used for the token
 CATEGORY_TO_TYPE = {
     "PERSON": "PERSON",

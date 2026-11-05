@@ -75,3 +75,20 @@ def test_no_false_alarms(text):
 )
 def test_header_classification(header, category):
     assert classify_header(header) == category
+
+
+def test_name_ends_at_the_end_of_a_short_line():
+    spans = PatternDetector().detect("Betreff: Herr Max Müller\nGeburtsdatum: 03.11.1962\nAlles gut.")
+    assert [s.text for s in spans if s.entity_type == "PERSON"] == ["Max Müller"]
+
+
+def test_name_continues_after_a_long_wrapped_line():
+    text = "Wir berichten hier ausführlich über den Verlauf bei Herrn Max\nMüller aus der Ambulanz."
+    spans = PatternDetector().detect(text)
+    assert [" ".join(s.text.split()) for s in spans if s.entity_type == "PERSON"] == ["Max Müller"]
+
+
+def test_label_on_the_next_line_is_never_part_of_a_name():
+    text = "Wir berichten hier ausführlich über den Verlauf bei Herrn Max Müller\nDiagnose: gut"
+    spans = PatternDetector().detect(text)
+    assert [s.text for s in spans if s.entity_type == "PERSON"] == ["Max Müller"]

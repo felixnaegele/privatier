@@ -35,6 +35,9 @@ _NOT_NAMES = {
 }
 
 
+_WRAPPED_LINE = 50  # characters; shorter lines ended on purpose
+
+
 @dataclass(frozen=True)
 class Rule:
     name: str
@@ -155,11 +158,29 @@ class PatternDetector:
                 if not value:
                     continue
                 if rule.entity_type == "PERSON":
+                    value = _cut_at_line_end(text, start, value)
                     value, end = _trim_non_names(value, start)
                     if not value:
                         continue
                 spans.append(Span(start, start + len(value), rule.entity_type, value, "pattern"))
         return spans
+
+
+def _cut_at_line_end(text: str, start: int, value: str) -> str:
+    """"Herr Max Müller" + new line + "Geburtsdatum: ..." : the next line is not part of the name.
+
+    Only a long line that was wrapped automatically can continue a name on the next line.
+    """
+    match = re.search(r"\s*\n\s*", value)
+    if match is None:
+        return value
+    line_start = text.rfind("\n", 0, start) + 1
+    wrapped = start + match.start() - line_start >= _WRAPPED_LINE
+    after = value[match.end() :]
+    next_word_end = start + match.end() + len(after.split()[0]) if after.split() else start + len(value)
+    if wrapped and text[next_word_end : next_word_end + 1] != ":":
+        return value
+    return value[: match.start()]
 
 
 def _trim_non_names(value: str, start: int) -> tuple[str, int]:

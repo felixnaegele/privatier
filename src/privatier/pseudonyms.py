@@ -11,7 +11,14 @@ import re
 
 from .detect.base import ENTITY_TYPES, Span
 
-TOKEN_RE = re.compile(rf"\b({'|'.join(ENTITY_TYPES)})[ _-]?(\d{{4,}})\b", re.IGNORECASE)
+# A code can carry a form suffix, because the same person can appear in different forms:
+# PERSON_0001 is the full name, PERSON_0001_F the first name, PERSON_0001_L the surname and
+# PERSON_0001_V1 another spelling. This keeps one visible identifier per person, and restoring
+# still gives back exactly what was written. Codes may touch "_" ("Arztbrief_PERSON_0001").
+TOKEN_RE = re.compile(
+    rf"(?<![^\W_])({'|'.join(ENTITY_TYPES)})[ _-]?(\d{{4,}})(?:_([A-Z]\d*)(?![^\W_]))?(?![^\W_])",
+    re.IGNORECASE,
+)
 
 # Types whose real values are searched for again in every other file.
 _PROPAGATE = {"PERSON", "ORG", "LOCATION", "ADDRESS", "ID", "EMAIL", "PHONE", "IBAN"}
@@ -31,17 +38,45 @@ class Pseudonymizer:
         self._token_to_original: dict[str, str] = {}
         self._token_type: dict[str, str] = {}
         self._counters: dict[str, int] = {t: 0 for t in ENTITY_TYPES}
+        self._forms: dict[tuple[str, str], str] = {}  # (base token, exact text) -> token
+        self.people: list[dict] = []  # who is who, see identity.py
 
     # -- assigning tokens ------------------------------------------------------
+    def _new_token(self, entity_type: str, original: str) -> str:
+        self._counters[entity_type] += 1
+        token = f"{entity_type}_{self._counters[entity_type]:04d}"
+        self._token_to_original[token] = original
+        self._token_type[token] = entity_type
+        return token
+
     def token_for(self, entity_type: str, value: str) -> str:
         key = (entity_type, _normalise(entity_type, value))
         token = self._key_to_token.get(key)
         if token is None:
-            self._counters[entity_type] += 1
-            token = f"{entity_type}_{self._counters[entity_type]:04d}"
+            token = self._new_token(entity_type, " ".join(str(value).split()))
             self._key_to_token[key] = token
-            self._token_to_original[token] = " ".join(str(value).split())
-            self._token_type[token] = entity_type
+        return self.form_of(token, str(value))
+
+    def new_person(self, canonical: str) -> str:
+        """A code of its own: two people with the same name must never share one."""
+        return self._new_token("PERSON", canonical)
+
+    def form_of(self, base: str, text: str, form: str = "V") -> str:
+        """The code for this exact spelling, so that restoring gives back what was written."""
+        text = " ".join(str(text).split())
+        if text == self._token_to_original[base]:
+            return base
+        token = self._forms.get((base, text))
+        if token is None:
+            taken = sum(1 for (b, _), t in self._forms.items() if b == base and t.startswith(f"{base}_{form}"))
+            if form == "V":
+                suffix = f"V{taken + 1}"
+            else:
+                suffix = form if taken == 0 else f"{form}{taken + 1}"
+            token = f"{base}_{suffix}"
+            self._forms[(base, text)] = token
+            self._token_to_original[token] = text
+            self._token_type[token] = self._token_type[base]
         return token
 
     def original(self, token: str) -> str | None:
@@ -71,19 +106,26 @@ class Pseudonymizer:
             "entries": [
                 {"token": t, "type": self._token_type[t], "original": o}
                 for t, o in self._token_to_original.items()
-            ]
+            ],
+            "people": self.people,
         }
 
     @classmethod
     def from_dict(cls, data: dict) -> Pseudonymizer:
         p = cls()
+        p.people = data.get("people", [])
+        person_tokens = {person["token"] for person in p.people}
         for e in data["entries"]:
             token, etype, original = e["token"], e["type"], e["original"]
-            p._key_to_token[(etype, _normalise(etype, original))] = token
             p._token_to_original[token] = original
             p._token_type[token] = etype
-            num = int(token.rsplit("_", 1)[1])
-            p._counters[etype] = max(p._counters.get(etype, 0), num)
+            m = TOKEN_RE.fullmatch(token)
+            p._counters[etype] = max(p._counters.get(etype, 0), int(m.group(2)))
+            base = f"{m.group(1).upper()}_{m.group(2)}"
+            if m.group(3):
+                p._forms[(base, original)] = token
+            elif token not in person_tokens:  # people are matched by evidence, never by name alone
+                p._key_to_token[(etype, _normalise(etype, original))] = token
         return p
 
 
