@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "privatier"
+version = "0.1.0"
+description = "Local, auditable pseudonymisation of research project folders before working with cloud AI."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.0",
+    "openpyxl>=3.1",
+    "pyreadstat>=1.2",
+    "python-docx>=1.1",
+    "pypdf>=4.0",
+    "cryptography>=42",
+]
+
+[project.optional-dependencies]
+# Local AI name recognition (GLiNER). Large download (PyTorch); recommended on Apple Silicon / modern laptops.
+ai = ["gliner>=0.2.13"]
+dev = ["pytest>=8", "reportlab>=4"]
+
+[project.scripts]
+privatier = "privatier.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

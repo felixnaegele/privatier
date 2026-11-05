@@ -1,0 +1,18 @@
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+build/
+dist/
+
+# Never commit data, outputs or key files
+*_anonymized/
+*_privatier/
+*_restored/
+*.vault
+sample_project/
+data/
+
+# OS
+.DS_Store
