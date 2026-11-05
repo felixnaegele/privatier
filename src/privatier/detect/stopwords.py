@@ -10,6 +10,8 @@ are unaffected. Matching ignores upper/lower case. Add words as needed.
 """
 
 STOPWORDS = {
+    # pronouns (capitalised at the start of a sentence)
+    "wir",
     # people / roles
     "patient", "patientin", "patienten", "patientinnen", "pat.", "proband", "probandin", "probanden",
     "teilnehmer", "teilnehmerin", "teilnehmende", "participant", "participants", "subject", "subjects",

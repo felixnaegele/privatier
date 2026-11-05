@@ -169,7 +169,8 @@ class FakeAI:
 
     name = "ner"
     GUESSES = {"Thomas": "PERSON", "Hamburg": "LOCATION", "Intervention": "ORG",
-               "Patienten": "PERSON", "Geschlecht": "PERSON", "Patient": "PERSON", "m": "PERSON"}
+               "Patienten": "PERSON", "Geschlecht": "PERSON", "Patient": "PERSON", "m": "PERSON",
+               "Wir": "ORG"}
 
     def detect(self, text):
         import re
@@ -206,3 +207,15 @@ def test_ai_false_alarms_do_not_damage_data(tmp_path):
 
     df, meta = pyreadstat.read_sav(str(out / "daten" / "fragebogen.sav"))
     assert meta.variable_value_labels["gruppe"][1.0] == "Intervention"
+
+
+def test_ai_does_not_replace_wir(tmp_path):
+    from privatier.detect import PatternDetector
+
+    src = make(tmp_path / "Studie")
+    (src / "notiz.txt").write_text("Wir berichten über Thomas aus Hamburg.", encoding="utf-8")
+    anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), FakeAI()])
+
+    note = (tmp_path / "Studie_anonymized" / "notiz.txt").read_text(encoding="utf-8")
+    assert note.startswith("Wir berichten über ")
+    assert "Thomas" not in note and "Hamburg" not in note
