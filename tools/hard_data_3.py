@@ -70,7 +70,6 @@ out = work / "Psych_Studie_anonymized"
 texts = {}
 for p in out.rglob("*"):
     rel = str(p.relative_to(out))
-    texts[rel + " [path]"] = rel
     if p.suffix == ".xlsx":
         texts[rel] = "\n".join(" | ".join("" if v is None else str(v) for v in r) for r in load_workbook(p).active.iter_rows(values_only=True))
     elif p.suffix == ".docx":
@@ -78,7 +77,7 @@ for p in out.rglob("*"):
     elif p.is_file():
         texts[rel] = p.read_bytes().decode("cp1252", "replace") if p.suffix == ".csv" else p.read_text(encoding="utf-8")
 
-MUST_GO = ["Hoffmann", "Karin", "Petersen", "Ole", "Jansen", "Fenja", "van den Berg", "Willem", "vdBerg", "Rahimi", "Mohammad",
+MUST_GO = ["Hoffmann", "Karin", "Petersen", "Ole", "Jansen", "Fenja", "van den Berg", "Willem", "Rahimi", "Mohammad",
            "Pohl", "Nowak", "Marta", "Annelies", "Lars", "Jens", "Birgit", "Clausen", "Finn", "Haddad", "Leyla", "Zahra",
            "23.08.1961", "14.12.1984", "02.06.1999", "30.04.1955", "17.09.1990", "leyla.haddad", "0431 5550142",
            "12 170990", "L01X00T47", "Holstenstraße", "Rostock", "Lübeck", "Husum", "Flensburg", "Mashhad", "Gorch-Fock"]

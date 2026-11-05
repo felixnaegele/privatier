@@ -22,7 +22,7 @@ from pathlib import Path
 from .audit import AuditLog, sha256
 from .detect import PatternDetector
 from .handlers import handler_for
-from .pseudonyms import Pseudonymizer
+from .pseudonyms import KnownValueDetector, Pseudonymizer
 from .transform import Anonymizer, Restorer, Transformer
 from .vault import load_vault, save_vault
 
@@ -37,6 +37,7 @@ class Summary:
     skipped: list[tuple[str, str]] = field(default_factory=list)
     errors: list[tuple[str, str]] = field(default_factory=list)
     warnings: list[tuple[str, str]] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)  # for information, nothing to decide
     counts: Counter[str] = field(default_factory=Counter)
     unknown_tokens: Counter[str] = field(default_factory=Counter)
 
@@ -163,9 +164,6 @@ def anonymize_folder(
             if handler is None:
                 continue
             anon.current_file = str(path.relative_to(input_dir))
-            anon.file_name(path.stem)
-            for part in path.relative_to(input_dir).parent.parts:
-                anon.file_name(part)
             try:
                 handler.process(path, None, anon)
             except Exception:
@@ -177,6 +175,13 @@ def anonymize_folder(
             audit.write("identity_review", file=file, note=note)
         for note in dict.fromkeys(anon.registry.settled):
             audit.write("identity_settled", note=note)
+        known = KnownValueDetector(pseudo)
+        named = [f for f in files if known.detect(str(f.relative_to(input_dir)))]
+        if named:
+            summary.notes.append(
+                f"{len(named)} file or folder name(s) contain a name or value from the data. Names are kept on "
+                "purpose: look at them before you upload."
+            )
 
         # Pass 2: write the anonymised copy.
         output_dir.mkdir(parents=True)
@@ -190,8 +195,8 @@ def anonymize_folder(
                 audit.write("file_skipped", file=str(rel), reason=reason, sha256=sha256(path))
                 continue
             anon.reset_file_stats()
-            out_rel = _output_rel_path(rel, handler.output_name(path), anon)
-            dst = _unique(output_dir / out_rel)
+            # File and folder names stay as they are, so that people can keep track of their files.
+            dst = _unique(output_dir / rel.parent / handler.output_name(path))
             dst.parent.mkdir(parents=True, exist_ok=True)
             try:
                 handler.process(path, dst, anon)
@@ -216,6 +221,11 @@ def anonymize_folder(
                 warnings=anon.warnings,
             )
 
+    if anon.kept_date_columns:
+        summary.notes.append(
+            f"{len(anon.kept_date_columns)} date column(s) other than birth dates were kept with day and month."
+        )
+        audit.write("date_columns_kept", columns=sorted(anon.kept_date_columns))
     save_vault(key_path, pseudo.to_dict(), password)
     audit.write(
         "run_finished",

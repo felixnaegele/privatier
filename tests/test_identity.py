@@ -253,13 +253,18 @@ def test_csv_round_trip_is_exact(tmp_path):
     assert restored == original
 
 
-def test_file_names_are_restored(tmp_path):
+def test_file_names_are_kept_and_tokens_in_result_names_are_restored(tmp_path):
     src = tmp_path / "Studie"
     src.mkdir()
-    (src / "Akte_Patient Anna Schmidt.txt").write_text("Patientin Anna Schmidt", encoding="utf-8")
+    (src / "Akte_Anna_Schmidt_12031948.txt").write_text("Patientin Anna Schmidt", encoding="utf-8")
     anonymize_folder(src, PASSWORD)
-    restored = round_trip(tmp_path, tmp_path / "Studie_anonymized")
-    assert [p.name for p in restored.iterdir()] == ["Akte_Patient Anna Schmidt.txt"]
+    out = tmp_path / "Studie_anonymized"
+    assert [p.name for p in out.iterdir()] == ["Akte_Anna_Schmidt_12031948.txt"]
+    results = tmp_path / "Ergebnisse"
+    results.mkdir()
+    (results / "Bericht_PERSON_0001.txt").write_text("PERSON_0001", encoding="utf-8")
+    restore_folder(results, tmp_path / "Studie_privatier" / KEY_FILE, PASSWORD)
+    assert (tmp_path / "Ergebnisse_restored" / "Bericht_Anna Schmidt.txt").exists()
 
 
 def test_full_birth_dates_are_kept_in_the_key_only(tmp_path):
@@ -583,13 +588,13 @@ def test_coded_spss_column_keeps_its_codes_and_cleans_its_labels(tmp_path):
     assert list(out["vpn"])[0].startswith("ID_")  # "Versuchsperson" is a subject ID
 
 
-def test_birth_date_in_a_folder_name(tmp_path):
+def test_folder_names_stay_too(tmp_path):
     src = tmp_path / "Studie"
     (src / "Schulz_Peter_12031948").mkdir(parents=True)
     (src / "Schulz_Peter_12031948" / "a.txt").write_text("Patient: Schulz, Peter (*12.3.1948)\n", encoding="utf-8")
     anonymize_folder(src, PASSWORD)
-    names = [p.name for p in (tmp_path / "Studie_anonymized").iterdir()]
-    assert not any("12031948" in n or "Schulz" in n or "Peter" in n for n in names)
+    result = tmp_path / "Studie_anonymized" / "Schulz_Peter_12031948" / "a.txt"
+    assert "Schulz" not in result.read_text(encoding="utf-8")
 
 
 def test_the_hard_dataset_has_no_problems_with_rules_only(capsys):
@@ -644,24 +649,15 @@ def test_study_code_is_evidence_and_separates_people(tmp_path):
     assert rows[1][1] != rows[2][1]
 
 
-def test_document_words_in_file_names_do_not_spread(tmp_path):
+def test_words_in_file_names_are_not_read_as_names(tmp_path):
     from privatier.detect import PatternDetector
-    from privatier.detect.base import Span
-
-    class FileNameAI:
-        name = "ner"
-
-        def detect(self, text):
-            return [Span(0, len(text), "PERSON", text, "ner", 0.9)] if text == "Gutachten vdBerg" else []
 
     src = tmp_path / "Studie"
     src.mkdir()
-    (src / "Gutachten_vdBerg.txt").write_text("Das Gutachten ist fertig.\n", encoding="utf-8")
-    anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), FileNameAI()])
-    out = tmp_path / "Studie_anonymized"
-    only = next(out.iterdir())
-    assert "vdBerg" not in only.name and only.name.startswith("Gutachten_")
-    assert only.read_text(encoding="utf-8") == "Das Gutachten ist fertig.\n"
+    (src / "Gutachten_Verlauf.txt").write_text("Das Gutachten und der Verlauf.\n", encoding="utf-8")
+    anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), WrongAI()])
+    only = next((tmp_path / "Studie_anonymized").iterdir())
+    assert only.name == "Gutachten_Verlauf.txt" and only.read_text(encoding="utf-8") == "Das Gutachten und der Verlauf.\n"
 
 
 def test_ai_finding_stops_at_the_end_of_the_line(tmp_path):
@@ -700,24 +696,10 @@ def test_surname_of_several_words_is_flagged_within_the_document(tmp_path):
     assert any("may belong to PERSON_0001" in note for _, note in summary.warnings)
 
 
-def test_file_name_comes_back_exactly_when_read_with_spaces(tmp_path):
-    from privatier.detect import PatternDetector
-    from privatier.detect.base import Span
-
-    class NameAI:
-        name = "ner"
-
-        def detect(self, text):
-            at = text.find("Schulz Peter")
-            return [] if at < 0 else [Span(at, at + 12, "PERSON", "Schulz Peter", "ner", 0.9)]
-
-    src = tmp_path / "Studie"
-    (src / "Schulz_Peter_1").mkdir(parents=True)
-    (src / "Schulz_Peter_1" / "a.txt").write_text("x\n", encoding="utf-8")
-    anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), NameAI()])
-    assert "Schulz" not in str(list((tmp_path / "Studie_anonymized").rglob("*")))
-    restored = round_trip(tmp_path, tmp_path / "Studie_anonymized")
-    assert (restored / "Schulz_Peter_1" / "a.txt").exists()
+def test_table_with_a_name_in_its_file_name_keeps_it(tmp_path):
+    out, summary = run(tmp_path, {"Mueller_Max_1962.csv": "Name;DOB\nMax Mueller;03.11.1962\n"})
+    assert (out / "Mueller_Max_1962.csv").exists()
+    assert any("Names are kept on purpose" in note for note in summary.notes)
 
 
 # --- tables first: what real study files showed -----------------------------------
@@ -959,3 +941,289 @@ def test_the_ai_is_only_asked_about_real_free_text_in_tables(tmp_path):
     lines = out.read_text(encoding="utf-8-sig").splitlines()
     assert lines[1].split(";")[1:4] == ["Placebo", "T0", "Aortic Stenosis"]
     assert "Kim Ross" not in lines[-1] and "called the ward" in lines[-1]
+
+
+# --- surgery dates stay granular ---------------------------------------------------
+@pytest.mark.parametrize("header", ["Surgery date", "OP Datum", "date_surgery", "dateofsurgery", "Dateofrehospitalization", "Date of FU/ date of death", "Sterbedatum"])
+def test_dates_other_than_birth_dates_keep_day_and_month(tmp_path, header):
+    rows = [["Patient ID", header, "Note"]]
+    rows += [[f"P{i}", dt.datetime(2020, 2, i + 1) if i % 2 else f"{i + 1}.3.2021", "ok"] for i in range(6)]
+    summary = anonymize_folder(excel(tmp_path, rows), PASSWORD)
+    result = output_rows(tmp_path)
+    assert [r[1] for r in result[1:]] == [r[1] for r in rows[1:]]
+    assert summary.warnings == []  # keeping them is the rule, not a question
+    assert any("kept with day and month" in note for note in summary.notes)
+
+
+def test_spss_surgery_date_keeps_day_and_month(tmp_path):
+    src = tmp_path / "Studie"
+    src.mkdir()
+    df = pd.DataFrame({"pat_id": [1000.0, 1001.0], "date_surgery": pd.to_datetime(["2020-02-03", "2021-05-06"])})
+    pyreadstat.write_sav(df, str(src / "a.sav"))
+    anonymize_folder(src, PASSWORD)
+    out, _ = pyreadstat.read_sav(str(tmp_path / "Studie_anonymized" / "a.sav"))
+    assert out["date_surgery"].iloc[0] == pd.Timestamp("2020-02-03")
+
+
+def test_free_text_dates_are_still_replaced(tmp_path):
+    out, _ = run(tmp_path, {"a.csv": "Patient ID;Notes\nP1;Called on 03.04.2021 about results\n"})
+    assert "03.04.2021" not in table(out, "a.csv")[1][1]
+
+
+# --- does a birth date column hold birth dates? ------------------------------------
+def birth_table(tmp_path, births, surgeries=None, ages=None):
+    rows = [["Patient ID", "Date of birth"] + (["Surgery date"] if surgeries else []) + (["Age"] if ages else [])]
+    for i, born in enumerate(births):
+        row = [f"P{i}", born]
+        if surgeries:
+            row.append(surgeries[i])
+        if ages:
+            row.append(ages[i])
+        rows.append(row)
+    return anonymize_folder(excel(tmp_path, rows), PASSWORD)
+
+
+def d(year, month=6, day=15):
+    return dt.datetime(year, month, day)
+
+
+def test_real_looking_birth_dates_raise_no_question(tmp_path):
+    births = [d(1950 + i) for i in range(8)]
+    surgeries = [d(2020) for _ in range(8)]
+    ages = [70 - i for i in range(8)]
+    summary = birth_table(tmp_path, births, surgeries, ages)
+    assert summary.warnings == []
+
+
+def test_birth_date_column_holding_the_same_dates_as_another_column(tmp_path):
+    dates = [d(2010 + i) for i in range(8)]
+    summary = birth_table(tmp_path, dates, list(dates))
+    assert any("called a birth date" in n and "same dates" in n and "column C" in n for _, n in summary.warnings)
+    assert output_rows(tmp_path)[1][1] == 2010  # still protected until the user corrects the header
+
+
+def test_mislabelled_birth_date_is_found_across_sheets(tmp_path):
+    src = tmp_path / "Studie"
+    src.mkdir()
+    wb = Workbook()
+    first = wb.active
+    first.title = "Genese"
+    first.append(["dob", "numbering"])
+    second = wb.create_sheet("Prothesis")
+    second.append(["Geb.Datum", "OP Datum", "numbering"])
+    for i in range(8):
+        first.append([d(2010 + i), i])
+        second.append([d(1950 + i), d(2010 + i), i])
+    wb.save(src / "a.xlsx")
+    summary = anonymize_folder(src, PASSWORD)
+    notes = [n for _, n in summary.warnings if "called a birth date" in n]
+    assert len(notes) == 1 and "Genese, column A" in notes[0] and "Prothesis, column B" in notes[0]
+
+
+def test_birth_date_after_surgery_is_flagged_with_a_count(tmp_path):
+    births = [d(1950 + i) for i in range(8)]
+    births[0] = d(2022)
+    summary = birth_table(tmp_path, births, [d(2020) for _ in range(8)])
+    assert any("in 1 row(s) the birth date comes after" in n for _, n in summary.warnings)
+
+
+def test_birth_dates_in_the_future_or_too_long_ago(tmp_path):
+    births = [d(1950 + i) for i in range(6)] + [d(2999), d(1800)]
+    summary = birth_table(tmp_path, births)
+    notes = " ".join(n for _, n in summary.warnings)
+    assert "1 date(s) lie in the future" in notes and "older than 120" in notes
+
+
+def test_birth_dates_that_do_not_fit_the_age_column(tmp_path):
+    births = [d(2000 + i) for i in range(8)]
+    summary = birth_table(tmp_path, births, [d(2020) for _ in range(8)], [75] * 8)
+    assert any("does not fit the age column" in n for _, n in summary.warnings)
+
+
+def test_age_at_surgery_fits_even_though_it_was_long_ago(tmp_path):
+    births = [d(1950) for _ in range(8)]
+    summary = birth_table(tmp_path, births, [d(2000) for _ in range(8)], [50] * 8)
+    assert summary.warnings == []
+
+
+def test_too_few_values_are_not_judged(tmp_path):
+    summary = birth_table(tmp_path, [d(2010), d(2011)], [d(2010), d(2011)])
+    assert summary.warnings == []
+
+
+def test_question_about_birth_dates_holds_no_values(tmp_path):
+    dates = [d(2010 + i) for i in range(8)]
+    summary = birth_table(tmp_path, dates, list(dates))
+    assert "2010" not in " ".join(n for _, n in summary.warnings)
+
+
+# --- stored formula results --------------------------------------------------------
+def excel_with_results(tmp_path, rows, results, name="a.xlsx", sheets=None):
+    """A file as Excel would save it: formulas with their stored results."""
+    from privatier.handlers.excel_formulas import write_stored_results
+
+    src = tmp_path / "Studie"
+    src.mkdir(exist_ok=True)
+    wb = Workbook()
+    wb.active.title = "Daten"
+    for row in rows:
+        wb.active.append(row)
+    for title, sheet_rows in (sheets or {}).items():
+        extra = wb.create_sheet(title)
+        for row in sheet_rows:
+            extra.append(row)
+    wb.save(src / name)
+    write_stored_results(src / name, results)
+    return src
+
+
+def stored_values(tmp_path, name="a.xlsx", sheet=0):
+    return load_workbook(tmp_path / "Studie_anonymized" / name, data_only=True).worksheets[sheet]
+
+
+def test_formula_results_survive_for_tools_that_do_not_recalculate(tmp_path):
+    rows = [["Patient ID", "Weight", "Height", "BMI", "Obese", "Label", "Flag"]]
+    rows += [["P1", 90, 1.8, "=B2/C2^2", '=IF(D2>=30,1,0)', '=IF(E2=1,"high","normal")', "=E2=1"]]
+    results = [{"D2": (None, "27.7"), "E2": (None, "0"), "F2": ("str", "normal"), "G2": ("b", "0")}]
+    src = excel_with_results(tmp_path, rows, results)
+    summary = anonymize_folder(src, PASSWORD)
+    sheet = stored_values(tmp_path)
+    assert sheet["D2"].value == 27.7 and sheet["E2"].value == 0
+    assert sheet["F2"].value == "normal" and sheet["G2"].value is False
+    assert load_workbook(tmp_path / "Studie_anonymized" / "a.xlsx").active["D2"].value == "=B2/C2^2"
+    assert summary.warnings == []
+    frame = pd.read_excel(tmp_path / "Studie_anonymized" / "a.xlsx")
+    assert frame["BMI"].iloc[0] == 27.7  # what Python, R and AI tools read
+
+
+def test_stored_date_result_stays_a_date(tmp_path):
+    from openpyxl.styles import numbers
+
+    rows = [["Patient ID", "Surgery date", "Control date"], ["P1", dt.datetime(2020, 1, 1), "=B2+30"]]
+    src = excel_with_results(tmp_path, rows, [{"C2": (None, "43861")}])
+    wb = load_workbook(src / "a.xlsx")
+    wb.active["C2"].number_format = numbers.FORMAT_DATE_YYYYMMDD2
+    wb.save(src / "a.xlsx")
+    from privatier.handlers.excel_formulas import write_stored_results
+
+    write_stored_results(src / "a.xlsx", [{"C2": (None, "43861")}])
+    anonymize_folder(src, PASSWORD)
+    assert stored_values(tmp_path)["C2"].value == dt.datetime(2020, 1, 31)
+
+
+@pytest.mark.parametrize(
+    "formula, stored",
+    [("=C2", (None, "27526")), ("=C2+1", (None, "27527")), ("=YEAR(C2)", (None, "1975")), ('=A2&" "&B2', ("str", "Mark Long")),
+     ("=SUM(A2:D2)", (None, "1")), ("=SUM(C:C)", (None, "1"))],
+)
+def test_results_that_depend_on_identifying_columns_are_not_kept(tmp_path, formula, stored):
+    rows = [["Vorname", "Nachname", "Geburtsdatum", "Score", "Result"], ["Mark", "Long", dt.datetime(1975, 5, 12), 5, formula]]
+    src = excel_with_results(tmp_path, rows, [{"E2": stored}])
+    summary = anonymize_folder(src, PASSWORD)
+    assert stored_values(tmp_path)["E2"].value is None
+    assert any("column E" in note and "stored results were removed" in note for _, note in summary.warnings)
+
+
+def test_results_depending_on_identifying_columns_through_other_formulas(tmp_path):
+    rows = [["Geburtsdatum", "Step", "Next", "Other", "Fine"], [dt.datetime(1975, 5, 12), "=A2", "=B2", 5, "=D2*2"]]
+    src = excel_with_results(tmp_path, rows, [{"B2": (None, "27526"), "C2": (None, "27526"), "E2": (None, "10")}])
+    anonymize_folder(src, PASSWORD)
+    sheet = stored_values(tmp_path)
+    assert sheet["B2"].value is None and sheet["C2"].value is None and sheet["E2"].value == 10
+
+
+def test_results_depending_on_identifying_columns_on_another_sheet(tmp_path):
+    rows = [["Score", "From other sheet"], [1, "=Stamm!A2"]]
+    sheets = {"Stamm": [["Geburtsdatum", "Score"], [dt.datetime(1975, 5, 12), 7]]}
+    results = [{"B2": (None, "27526")}, {}]
+    src = excel_with_results(tmp_path, rows, results, sheets=sheets)
+    anonymize_folder(src, PASSWORD)
+    assert stored_values(tmp_path)["B2"].value is None
+
+
+@pytest.mark.parametrize("formula", ["=[1]Sheet1!A1", "=Patient_DOB", "=SUM(Table1[DOB])"])
+def test_results_that_cannot_be_traced_are_not_kept(tmp_path, formula):
+    rows = [["Score", "Result"], [1, formula]]
+    src = excel_with_results(tmp_path, rows, [{"B2": (None, "27526")}])
+    anonymize_folder(src, PASSWORD)
+    assert stored_values(tmp_path)["B2"].value is None
+
+
+def test_text_results_are_checked_like_any_other_text(tmp_path):
+    rows = [["Score", "Label"], [1, '=IF(A2=1,"Patient Mark Long","x")']]
+    src = excel_with_results(tmp_path, rows, [{"B2": ("str", "Patient Mark Long")}])
+    anonymize_folder(src, PASSWORD)
+    sheet = stored_values(tmp_path)
+    assert "Long" not in sheet["B2"].value and sheet["B2"].value.startswith("Patient PERSON_")
+
+
+def test_excluded_function_names_are_not_read_as_cells(tmp_path):
+    from privatier.handlers.excel_formulas import references
+
+    assert references("=LOG10(D2)") == [(None, 4)]
+    assert references('=IF(A1>2,"A1 text",B$3)') == [(None, 1), (None, 2)]
+    assert references("='Other Sheet'!$C$1+Stamm!D2") == [("Other Sheet", 3), ("Stamm", 4)]
+    assert references("=A1:C2") == [(None, 1), (None, 2), (None, 3)]
+    assert references("=TRUE") == []
+    assert references("=MyName+1") is None
+
+
+def test_formula_follows_a_renamed_sheet(tmp_path):
+    src = tmp_path / "Studie"
+    src.mkdir()
+    wb = Workbook()
+    wb.active.title = "Frau Max Müller"
+    wb.active.append(["Score"])
+    wb.active.append([5])
+    other = wb.create_sheet("Auswertung")
+    other.append(["Result"])
+    other.append(["='Frau Max Müller'!A2"])
+    wb.save(src / "a.xlsx")
+    anonymize_folder(src, PASSWORD)
+    result = load_workbook(tmp_path / "Studie_anonymized" / "a.xlsx")
+    assert "Müller" not in result.worksheets[0].title
+    assert "Müller" not in result["Auswertung"]["A2"].value and result.worksheets[0].title in result["Auswertung"]["A2"].value
+
+
+def test_restore_keeps_stored_results(tmp_path):
+    rows = [["Patient ID", "Weight", "Double"], ["P1", 90, "=B2*2"]]
+    src = excel_with_results(tmp_path, rows, [{"C2": (None, "180")}])
+    anonymize_folder(src, PASSWORD)
+    restored = round_trip(tmp_path, tmp_path / "Studie_anonymized")
+    sheet = load_workbook(restored / "a.xlsx", data_only=True).active
+    assert sheet["A2"].value == "P1" and sheet["C2"].value == 180
+
+
+def test_numbers_keep_every_digit(tmp_path):
+    """The library that writes Excel files rounds to 16 digits; the original had 17."""
+    from privatier.handlers.excel_formulas import read_exact_numbers
+
+    src = tmp_path / "Studie"
+    src.mkdir()
+    wb = Workbook()
+    for row in [["Patient ID", "Geburtsjahr", "esvi"], ["P1", 1975, 1.0], ["P2", 1980, 2.0]]:
+        wb.active.append(row)
+    wb.save(src / "a.xlsx")
+    # Write 17 digits the way Excel does.
+    import zipfile
+
+    source = src / "a.xlsx"
+    with zipfile.ZipFile(source) as z:
+        parts = {i.filename: z.read(i.filename) for i in z.infolist()}
+    sheet = "xl/worksheets/sheet1.xml"
+    assert b"<v>1</v>" in parts[sheet]
+    parts[sheet] = parts[sheet].replace(b"<v>1</v>", b"<v>41.123456789012345</v>", 1)
+    with zipfile.ZipFile(source, "w") as z:
+        for name, data in parts.items():
+            z.writestr(name, data)
+    anonymize_folder(src, PASSWORD)
+    out = tmp_path / "Studie_anonymized" / "a.xlsx"
+    assert read_exact_numbers(out)[0]["C2"] == "41.123456789012345"
+    assert load_workbook(out).active["C2"].value == load_workbook(source).active["C2"].value
+
+
+def test_replaced_numbers_are_not_put_back(tmp_path):
+    rows = [["Patient ID", "Geburtsdatum", "Score"], [100123, dt.datetime(1975, 5, 12), 5]]
+    anonymize_folder(excel(tmp_path, rows), PASSWORD)
+    result = output_rows(tmp_path)
+    assert result[1][0].startswith("ID_") and result[1][1] == 1975 and result[1][2] == 5

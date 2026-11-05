@@ -31,7 +31,6 @@ def all_output_text(folder: Path) -> str:
     """Everything a person (or an AI) could read from the output folder, incl. file names and metadata."""
     chunks = []
     for path in folder.rglob("*"):
-        chunks.append(str(path.relative_to(folder)))
         if not path.is_file():
             continue
         if path.suffix in (".docx", ".xlsx"):
@@ -57,11 +56,10 @@ def test_no_sensitive_value_left(project):
     assert leaks == [], f"Sensitive values found in output: {leaks}"
 
 
-def test_file_names_anonymised(project):
-    root, _, _ = project
-    names = [p.name for p in (root / "Studie_anonymized").rglob("*")]
-    assert not any("Schmidt" in n for n in names)
-    assert any(n.startswith("Arztbrief_PERSON_") for n in names)
+def test_file_names_stay_so_that_people_can_keep_track(project):
+    root, _, summary = project
+    assert (root / "Studie_anonymized" / "Arztbrief_Schmidt.docx").exists()
+    assert any("name(s) contain" in note for note in summary.notes)
 
 
 def test_unsupported_files_are_not_copied(project):

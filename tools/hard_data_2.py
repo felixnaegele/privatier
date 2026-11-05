@@ -80,7 +80,6 @@ out = work / "Projekt_anonymized"
 
 texts = {}
 for p in out.rglob("*"):
-    texts[f"{p.relative_to(out)} [path]"] = str(p.relative_to(out))
     if p.is_file():
         if p.suffix == ".xlsx":
             b = load_workbook(p)

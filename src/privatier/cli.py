@@ -75,6 +75,8 @@ def _print_summary(title: str, s) -> None:
         print(f"\n  Errors (NOT copied to the output) - {len(s.errors)}:")
         for f, err in s.errors:
             print(f"    - {f}: {err}")
+    for note in getattr(s, "notes", []):
+        print(f"\n  Note: {note}")
     if s.warnings:
         print("\n  Please check:")
         for line in _grouped_questions(s.warnings):

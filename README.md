@@ -53,7 +53,7 @@ Detection works in layers:
    common research words such as "Patient", "Intervention" or "Kontrolle" (editable list in
    `src/privatier/detect/stopwords.py`).
 4. **Known values everywhere:** anything found in step 1–3 is also replaced wherever else it appears in the
-   project, e.g. a name from an Excel column that turns up in a Word letter, or in a file name.
+   project, e.g. a name from an Excel column that turns up in a Word letter.
 
 ### Tables first: what happens to each column
 
@@ -64,12 +64,20 @@ anyone comes out exactly as it went in.
 |---|---|
 | Names, IDs, contact details (recognised by the header, German or English) | Replaced by codes |
 | Birth date | Reduced to the year; the full date stays in the encrypted key |
-| Other dates (surgery, follow-up, death), also when written as text | Kept as they are, and listed once for you to check |
+| Other dates (surgery, follow-up, death), also when written as text | Kept with day and month, as this detail often matters |
 | Categories that repeat a few values (`Placebo`, `T0`, valve types) | Never sent to the AI |
 | Free-text columns | Rules everywhere; the AI reads cells of two or more words, and changes are flagged |
 | Rows that explain the columns (`(dd/mm/yyyy)`, `(0=no,1=yes)`) | Kept |
+| Formulas | Kept, with their stored results, so tools that do not recalculate still see the values |
+| Formulas that use an identifying column, also indirectly or through a reference that cannot be traced | Kept, but the stored result is removed as it could reveal the data, and Privatier tells you which column |
 | **No header**, and the values look like names, dates or IDs | Replaced, because it could be a birth date or a name, and Privatier asks what it is |
 | Header says nothing, but the values look like names | Left as it is, and Privatier asks |
+
+A header can be wrong, so Privatier also checks that a birth date column holds birth dates. It asks if the dates
+match another date column, come after a surgery date, lie in the future, or do not fit the age column.
+
+**File and folder names are never changed**, so that you can keep track of your files. Names and dates in them
+stay: Privatier tells you when a name from the data appears in one, so you can look before you upload.
 
 ### How people are told apart
 
@@ -151,7 +159,7 @@ privatier anonymize sample_project
   when it is not the name ("im Mai"). Privatier prefers this to leaving a real name behind.
 - After restoring, a birth date can come back in a different written form (`1975-05-12` for `12.05.1975`), and
   IDs and dates in SPSS or Excel files come back as text. The values are the same.
-- Dates other than birth dates in spreadsheet columns (admission, visit…) are kept; Privatier warns about them.
+- Dates other than birth dates in spreadsheet columns (surgery, follow-up…) are kept with day and month on purpose. Exact dates can help identify someone, so consider this before you share the data.
 - Old Excel `.xls`, scanned PDFs (OCR) and images are not supported yet.
 - PDFs become text files; rewriting the PDF itself is planned.
 - No graphical app yet: drag-and-drop for Mac/Windows is the next step.

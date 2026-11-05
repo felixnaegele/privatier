@@ -4,10 +4,13 @@ import re
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.utils import get_column_letter
 from openpyxl.cell.cell import MergedCell
+from openpyxl.worksheet.formula import ArrayFormula, DataTableFormula
 
 from ..transform import Transformer
 from .base import SameNameMixin
+from .excel_formulas import column_of, read_exact_numbers, read_stored_results, unsafe_columns, write_stored_results
 
 _HEADER_SEARCH_ROWS = 20
 _FORMULA_TEXT = re.compile(r'"((?:[^"]|"")*)"')
@@ -31,7 +34,11 @@ def _find_header_row(ws) -> int | None:
 
 
 def _is_formula(value) -> bool:
-    return isinstance(value, str) and value.startswith("=")
+    return (isinstance(value, str) and value.startswith("=")) or isinstance(value, (ArrayFormula, DataTableFormula))
+
+
+def _formula_text(value) -> str:
+    return value.text or "" if isinstance(value, ArrayFormula) else str(value) if isinstance(value, str) else ""
 
 
 def _formula(value: str, t: Transformer) -> str:
@@ -56,13 +63,53 @@ def _page_margins(ws, t: Transformer) -> None:
                 part.text = t.text(part.text)
 
 
+def _follow_renamed_sheets(wb, titles: list[str]) -> None:
+    """A formula names the sheets it reads, and that name has to change along with the sheet."""
+    renamed = {old: ws.title for old, ws in zip(titles, wb.worksheets) if old != ws.title}
+    if not renamed:
+        return
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                if isinstance(cell.value, str) and cell.value.startswith("="):
+                    for old, new in renamed.items():
+                        quoted_old, quoted_new = old.replace("'", "''"), new.replace("'", "''")
+                        cell.value = cell.value.replace(f"'{quoted_old}'!", f"'{quoted_new}'!")
+                        cell.value = re.sub(rf"(?<![\w'.]){re.escape(old)}!", f"'{quoted_new}'!", cell.value)
+
+
+def _safe_results(stored, titles, formulas, sensitive, t: Transformer) -> list[dict]:
+    unsafe = unsafe_columns(formulas, sensitive)
+    results = []
+    for title, cells in zip(titles, stored):
+        kept = {}
+        withheld: set[int] = set()
+        for coordinate, (kind, value) in cells.items():
+            column = column_of(coordinate)
+            if column in unsafe.get(title, set()):
+                withheld.add(column)
+            elif kind == "str":
+                kept[coordinate] = (kind, t.header(value))  # a text result is text like any other
+            else:
+                kept[coordinate] = (kind, value)
+        results.append(kept)
+        for column in sorted(withheld):
+            t.note_withheld_results(f"{title}, column {get_column_letter(column)}")
+    return results
+
+
 class ExcelHandler(SameNameMixin):
     name = "excel"
     extensions = (".xlsx", ".xlsm")
 
     def process(self, src: Path, dst: Path | None, t: Transformer) -> None:
         wb = load_workbook(src, keep_vba=src.suffix.lower() == ".xlsm")
+        stored = read_stored_results(src)
+        titles = [ws.title for ws in wb.worksheets]
+        sensitive: dict[str, set[int]] = {}
+        formulas: dict[str, dict[int, list[str]]] = {}
         for ws in wb.worksheets:
+            original_title = ws.title
             t.begin_table(ws.title)
             header_row = _find_header_row(ws)
             columns = []
@@ -71,6 +118,10 @@ class ExcelHandler(SameNameMixin):
                     t.column(cell.value) if isinstance(cell.value, str) else t.column(None)
                     for cell in ws[header_row]
                 ]
+            sensitive[original_title] = {
+                ws.min_column + i for i, column in enumerate(columns) if t.identifies(i, column)
+            }
+            sheet_formulas = formulas.setdefault(original_title, {})
             for row in ws.iter_rows():
                 cells = [c for c in row if not isinstance(c, MergedCell)]
                 for cell in cells:
@@ -78,7 +129,11 @@ class ExcelHandler(SameNameMixin):
                         cell.comment.text = t.text(cell.comment.text)
                         cell.comment.author = ""
                     if _is_formula(cell.value):
-                        cell.value = _formula(cell.value, t)
+                        sheet_formulas.setdefault(cell.column, []).append(_formula_text(cell.value) or "[unknown]")
+                        if isinstance(cell.value, ArrayFormula):
+                            cell.value.text = _formula(cell.value.text or "", t)
+                        elif isinstance(cell.value, str):
+                            cell.value = _formula(cell.value, t)
                 if header_row and row[0].row > header_row:
                     self._data_row(row, columns, t)
                     continue
@@ -91,14 +146,17 @@ class ExcelHandler(SameNameMixin):
             new_title = t.header(ws.title)[:31]  # like a column name: short, without context for the AI
             if new_title != ws.title:
                 ws.title = new_title
+        _follow_renamed_sheets(wb, titles)
         wb.properties.creator = None
         wb.properties.lastModifiedBy = None
         for prop in _DOC_PROPERTIES:
             value = getattr(wb.properties, prop, None)
             if value:
                 setattr(wb.properties, prop, t.text(value))
+        results = _safe_results(stored, titles, formulas, sensitive, t)
         if dst is not None:
             wb.save(dst)
+            write_stored_results(dst, results, read_exact_numbers(src))
 
     @staticmethod
     def _data_row(row, columns, t: Transformer) -> None:

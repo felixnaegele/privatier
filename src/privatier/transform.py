@@ -11,6 +11,7 @@ import re
 from collections import Counter
 from typing import NamedTuple
 
+from .birthdates import check_birth_date_column
 from .detect.base import Detector, Span, resolve_overlaps
 from .detect.patterns import _NOT_NAMES, NAME_SEQ, NAME_WORD
 from .detect.stopwords import is_ordinary_use, is_stopword
@@ -121,6 +122,13 @@ class Transformer:
     def begin_table(self, name: str) -> None:
         """Handlers call this before each table or sheet."""
 
+    def identifies(self, index: int, column: Column) -> bool:
+        """Whether a column holds identifying values, so that nothing derived from it may stay."""
+        return column.category not in (None, "BIRTH_YEAR")
+
+    def note_withheld_results(self, where: str) -> None:
+        """A formula depends on identifying data, so its stored result was not kept."""
+
     def file_name(self, value: str) -> str:
         return self.text(value)
 
@@ -146,6 +154,19 @@ class Transformer:
     def row(self, columns: list[Column], values: list) -> list:
         """One table row. Handled as a whole, because the cells of a row belong to one person."""
         return [self.cell(_column_at(columns, i).category, v) for i, v in enumerate(values)]
+
+
+_AGE_HEADER = re.compile(r"(^|_)(age|alter)($|_)")
+
+
+def _single_date(value) -> dt.date | None:
+    if hasattr(value, "year") and hasattr(value, "day"):
+        return dt.date(int(value.year), int(value.month), int(value.day))
+    if isinstance(value, str):
+        birth = parse_birth_date(value)
+        if birth and len(birth.dates) == 1:
+            return dt.date.fromisoformat(next(iter(birth.dates)))
+    return None
 
 
 def _letters(index: int) -> str:
@@ -205,7 +226,11 @@ class Anonymizer(Transformer):
         self._ai_seen: dict[tuple, list] = {}
         self._has_ai = any(d.name in _AI_SOURCES for d in detectors)
         self._ai_off = False  # inside a table cell the AI is not asked about
-        self._ai_only_people = False
+        self.kept_date_columns: set[str] = set()
+        self._date_values: dict[tuple, dict[int, dt.date]] = {}
+        self._birth_columns: set[tuple] = set()
+        self._ages: dict[tuple, dict[int, float]] = {}  # (file, table) -> row -> age
+        self._column_names: dict[tuple, str] = {}
         self.collecting = True  # first pass: only gather evidence about who is who
         self.current_file = ""
         self._chunks: list[tuple[str, str, list[Span]]] = []
@@ -214,6 +239,7 @@ class Anonymizer(Transformer):
     def finish_collecting(self) -> None:
         """After the first pass: decide who is who, then also replace every value seen anywhere."""
         self._judge_columns()
+        self._check_birth_date_columns()
         self._ask_ai_about_free_text_columns()
         self.registry.resolve_records()
         self._find_known_people_in_text()
@@ -225,6 +251,18 @@ class Anonymizer(Transformer):
     def begin_table(self, name: str) -> None:
         self._table = name
         self._row_number = 0
+
+    def identifies(self, index: int, column: Column) -> bool:
+        action = self._column_actions.get((self.current_file, self._table, index))
+        return super().identifies(index, column) or action in ("PERSON", "ID", "DATE")
+
+    def note_withheld_results(self, where: str) -> None:
+        note = (
+            f"{where}: these formulas use an identifying column, so their stored results were removed. Excel will "
+            "recalculate them from the codes, which may give errors. Please check."
+        )
+        if not self.collecting and note not in self.warnings:
+            self.warnings.append(note)
 
     def _judge_columns(self) -> None:
         """Columns the header says nothing about are judged by their values. Nothing is assumed:
@@ -238,6 +276,7 @@ class Anonymizer(Transformer):
             if p.share(p.dates) >= _MOST:
                 if named:
                     self._column_actions[key] = "KEEP_DATES"
+                    self.kept_date_columns.add(where)
                 else:
                     self._column_actions[key] = "DATE"
                     self.registry.review.append(
@@ -263,6 +302,24 @@ class Anonymizer(Transformer):
                 for value in sorted(self._profiles[key].values):
                     self.pseudo.token_for("PERSON", value.strip())  # also looked for everywhere else
 
+    def _check_birth_date_columns(self) -> None:
+        for key in sorted(self._birth_columns):
+            file, table, _ = key
+            others = {
+                self._column_names[k]: values
+                for k, values in self._date_values.items()
+                if k[0] == file and k != key
+            }
+            same_table = {self._column_names[k] for k in self._date_values if k[:2] == (file, table) and k != key}
+            problems = check_birth_date_column(
+                self._date_values.get(key, {}), others, same_table, self._ages.get((file, table), {})
+            )
+            if problems:
+                self.registry.review.append(
+                    f"{file}, {self._column_names[key]} is called a birth date, but {'; '.join(problems)}. It was "
+                    "treated as a birth date (year only). If that is wrong, correct the header and run again."
+                )
+
     def _column_is_free_text(self, key: tuple) -> bool:
         """A column that repeats a few values holds categories ("Placebo", "T0"), not sentences about people."""
         p = self._profiles.get(key)
@@ -283,7 +340,6 @@ class Anonymizer(Transformer):
             return
         for key, profile in self._profiles.items():
             self.current_file, self._table, _ = key
-            self._ai_only_people = False
             for value in sorted(profile.values):
                 if self._ai_may_read(key, value):
                     self.text(value)
@@ -316,29 +372,17 @@ class Anonymizer(Transformer):
         # ("Geschlecht" as a person), so only rules and known values apply.
         return self.text(value, use_ai=False)
 
-    def file_name(self, value: str) -> str:
-        # "Verlauf_Berger" reads as two words to a person, so it has to for the detectors too.
-        # In the first pass only rules count: the AI guesses badly here, and a guess must not spread.
-        self._ai_only_people = True  # "Double Valve" is not an organisation
-        try:
-            return self.text(value, use_ai=not self.collecting, read_as=value.replace("_", " "))
-        finally:
-            self._ai_only_people = False
-
-    def text(self, value: str, use_ai: bool = True, read_as: str | None = None) -> str:
+    def text(self, value: str, use_ai: bool = True) -> str:
         if not value or not any(c.isalnum() for c in value):
             return value
         spans = []
         for detector in self.detectors:
             if detector.name in _AI_SOURCES and (not use_ai or self._ai_off):
                 continue
-            found = self._detect(detector, read_as if read_as is not None else value)
-            if detector.name in _AI_SOURCES and self._ai_only_people:
-                found = [s for s in found if s.entity_type == "PERSON"]
-            spans.extend(found)
+            spans.extend(self._detect(detector, value))
         if self._keep_dates:
             spans = [s for s in spans if s.entity_type != "DATE"]
-        spans = [_only_the_name(read_as if read_as is not None else value, s) for s in spans]
+        spans = [_only_the_name(value, s) for s in spans]
         spans = [
             s
             for s in spans
@@ -353,10 +397,6 @@ class Anonymizer(Transformer):
         out, last = [], 0
         for span in chosen:
             token = self._token_for_span(value, span, chosen)
-            written = value[span.start : span.end]
-            if written != span.text and not self.collecting:  # "Schulz_Peter", read as "Schulz Peter"
-                m = TOKEN_RE.match(token)
-                token = self.pseudo.form_of(f"{m.group(1)}_{m.group(2)}", written)
             out.append(value[last : span.start])
             out.append(token)
             last = span.end
@@ -416,13 +456,7 @@ class Anonymizer(Transformer):
 
     # -- tables ------------------------------------------------------------------
     def classify(self, header: str | None, label: str | None = None) -> str | None:
-        category = classify_header(header, label)
-        if category is None and looks_like_date_column(header, label):
-            self.warnings.append(
-                f"Column '{header}' looks like it holds dates. Dates other than the birth date are kept "
-                "as they are; check whether they could identify someone."
-            )
-        return category
+        return classify_header(header, label)
 
     def _record_of_row(self, columns: list[Column], values: list) -> Record | None:
         first, last, full, birth, gender = None, None, None, None, None
@@ -499,12 +533,31 @@ class Anonymizer(Transformer):
         self._row_person = None
         return out
 
+    def _note_for_birth_check(self, key: tuple, column: Column, value) -> None:
+        if column.category == "DOB":
+            self._birth_columns.add(key)
+        elif _AGE_HEADER.search(column.key) and isinstance(value, (int, float)):
+            self._ages.setdefault(key[:2], {})[self._row_number] = float(value)
+            return
+        date = _single_date(value)
+        if date is not None:
+            self._date_values.setdefault(key, {})[self._row_number] = date
+            table = f"{key[1]}, " if key[1] else ""
+            self._column_names[key] = f"{table}column {_letters(key[2])}"
+
     def _profile_row(self, columns: list[Column], values: list) -> None:
         for i, value in enumerate(values):
             column = _column_at(columns, i)
-            if column.category is not None or column.role == "gender" or _blank(value):
+            if _blank(value):
                 continue
             key = (self.current_file, self._table, i)
+            self._note_for_birth_check(key, column, value)
+            if column.category is None and column.dates:
+                self.kept_date_columns.add(
+                    f"{self.current_file}, {self._table + ', ' if self._table else ''}column {_letters(i)}"
+                )
+            if column.category is not None or column.role == "gender":
+                continue
             profile = self._profiles.get(key)
             if profile is None:
                 label = f"{self.current_file}, {self._table + ', ' if self._table else ''}column {_letters(i)}"
