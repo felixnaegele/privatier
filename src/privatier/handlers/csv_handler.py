@@ -57,6 +57,7 @@ class CsvHandler(SameNameMixin):
             if dst is not None:
                 dst.write_bytes(src.read_bytes())
             return
+        t.begin_table("")
         header_at = _find_header_row(rows)
         out_rows = []
         if header_at is None:  # no recognisable header: every cell is treated as free text

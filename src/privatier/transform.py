@@ -12,7 +12,7 @@ from collections import Counter
 from typing import NamedTuple
 
 from .detect.base import Detector, Span, resolve_overlaps
-from .detect.patterns import _NOT_NAMES, NAME_WORD
+from .detect.patterns import _NOT_NAMES, NAME_SEQ, NAME_WORD
 from .detect.stopwords import is_ordinary_use, is_stopword
 from .identity import Person, Record, Registry, name_key, name_parts, parse_birth_date, surname_first
 from .pseudonyms import TOKEN_RE, KnownValueDetector, Pseudonymizer
@@ -27,7 +27,7 @@ from .tables import (
 
 _NAME_ROLES = {"first", "last", "full"}
 _GENDER_WORDS = {
-    "m": "m", "male": "m", "maennlich": "m", "männlich": "m", "herr": "m", "herrn": "m", "hr": "m", "mr": "m",
+    "m": "m", "male": "m", "man": "m", "maennlich": "m", "männlich": "m", "herr": "m", "herrn": "m", "hr": "m", "mr": "m",
     "w": "f", "f": "f", "female": "f", "weiblich": "f", "frau": "f", "fr": "f", "mrs": "f", "ms": "f", "miss": "f",
     "patientin": "f",
 }
@@ -36,14 +36,22 @@ _BEFORE_NAME = re.compile(
 )
 _ACADEMIC = re.compile(r"(?:Dr\.|Prof\.|PD)\s*(?:med\.\s*)?$")
 _BIRTH_MARK = re.compile(
-    r"(?:geb\.?|geboren(?:\s+am)?|born(?:\s+on)?|DOB|Geburtsdatum|Date\s+of\s+birth|\*)\s*:?\s*$", re.IGNORECASE
+    r"(?:geb\.?|geboren(?:\s+am)?|born(?:\s+on)?|DOB|D\.O\.B\.?|Geburtsdatum|Date\s+of\s+birth|\*)\s*:?\s*$",
+    re.IGNORECASE,
 )
 _RELATIVE_BEFORE = re.compile(
     r"(?:Sohn|Tochter|Ehefrau|Ehemann|Ehegatte|Ehegattin|Mann|Partner(?:in)?|Lebensgefährt(?:e|in)|Mutter|Vater|Bruder|"
-    r"Schwester|Enkel(?:in)?|Onkel|Tante|Neffe|Nichte|Betreuer(?:in)?|Dolmetscher(?:in)?)[,:]?\s+$"
+    r"Schwester|Enkel(?:in)?|Onkel|Tante|Neffe|Nichte|Betreuer(?:in)?|Dolmetscher(?:in)?|son|daughter|wife|husband|"
+    r"partner|mother|father|brother|sister|grandson|granddaughter|nephew|niece|uncle|aunt|guardian|caregiver|"
+    r"interpreter)[,:]?\s+$",
+    re.IGNORECASE,
 )
 _WORD_BEFORE = re.compile(rf"(?:^|(?<=[^\w.!?:;\n]))\s*({NAME_WORD})[ ]$")
-_BIRTH_YEAR_AFTER = re.compile(r"[\s,(]*(?:Jg\.?|Jahrgang|geb\.?|geboren|\*)\s*((?:19|20)\d{2})(?!\d|\.)")
+_BIRTH_YEAR_AFTER = re.compile(
+    r"[\s,(]*(?:Jg\.?|Jahrgang|geb\.?|geboren|born(?:\s+in)?|b\.|\*)\s*((?:19|20)\d{2})(?!\d|\.)"
+)
+_WORTH_ASKING_AI = re.compile(r"[^\W\d_]{3}")
+_LOOKS_LIKE_NAME = re.compile(rf"{NAME_WORD},\s+{NAME_WORD}|{NAME_SEQ}|[^\W\d_]+(?:\s+[^\W\d_]+){{0,1}}\s+{NAME_WORD}")
 _ONLY_SEPARATORS = re.compile(r"^[\s,;(]*$")
 _NEAR = 80
 
@@ -55,6 +63,43 @@ class Column(NamedTuple):
     role: str | None = None  # for people: first, last, full, other; or gender
     key: str = ""
     visit_id: bool = False
+    dates: bool = False  # the header says this column holds dates other than the birth date
+
+
+_DATE_IN_TEXT = re.compile(r"^\s*\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|^\s*\d{4}-\d{2}-\d{2}")
+_LEGEND = re.compile(r"^\s*\(.*\)\s*$|^\s*\d+\s*=|=\s*\d|^\s*\[.*\]\s*$")
+_MAX_CATEGORIES = 20
+_MIN_WORDS_FOR_AI = 2
+_ALMOST_ALL = 0.8
+_MOST = 0.5
+_MIN_VALUES = 5
+
+
+class _Profile:
+    """What the values of one table column look like, to judge columns the header says nothing about."""
+
+    def __init__(self, column: Column, label: str):
+        self.column, self.label = column, label
+        self.filled, self.dates, self.names, self.whole = 0, 0, 0, 0
+        self.values: set[str] = set()
+
+    def add(self, value) -> None:
+        self.filled += 1
+        self.values.add(str(value))
+        if hasattr(value, "year"):
+            self.dates += 1
+        elif isinstance(value, str):
+            self.dates += bool(_DATE_IN_TEXT.match(value))
+            self.names += bool(_LOOKS_LIKE_NAME.fullmatch(value.strip())) and not is_stopword(value)
+        elif isinstance(value, (int, float)) and float(value).is_integer():
+            self.whole += 1
+
+    def share(self, count: int) -> float:
+        return count / self.filled if self.filled else 0.0
+
+    @property
+    def varied(self) -> float:
+        return self.share(len(self.values))
 
 
 class Transformer:
@@ -73,6 +118,9 @@ class Transformer:
         """Column names and variable/value labels."""
         return self.text(value)
 
+    def begin_table(self, name: str) -> None:
+        """Handlers call this before each table or sheet."""
+
     def file_name(self, value: str) -> str:
         return self.text(value)
 
@@ -89,6 +137,7 @@ class Transformer:
             column_role(header, label),
             column_key(header, label),
             is_visit_id(header, label),
+            looks_like_date_column(header, label),
         )
 
     def cell(self, category: str | None, value):
@@ -97,6 +146,22 @@ class Transformer:
     def row(self, columns: list[Column], values: list) -> list:
         """One table row. Handled as a whole, because the cells of a row belong to one person."""
         return [self.cell(_column_at(columns, i).category, v) for i, v in enumerate(values)]
+
+
+def _letters(index: int) -> str:
+    """0 -> A, 26 -> AA, as columns are named in a spreadsheet."""
+    out = ""
+    index += 1
+    while index:
+        index, rest = divmod(index - 1, 26)
+        out = chr(65 + rest) + out
+    return out
+
+
+def _is_legend_row(values: list) -> bool:
+    filled = [v for v in values if not _blank(v)]
+    texts = [v for v in filled if isinstance(v, str) and _LEGEND.search(v)]
+    return len(filled) >= _MIN_VALUES and len(texts) / len(filled) >= _MOST
 
 
 def _with_name_roles(columns: list[Column]) -> list[Column]:
@@ -125,12 +190,22 @@ def _cell_text(value) -> str:
 
 
 class Anonymizer(Transformer):
-    def __init__(self, pseudonymizer: Pseudonymizer, detectors: list[Detector]):
+    def __init__(self, pseudonymizer: Pseudonymizer, detectors: list[Detector], link_by_name: bool = False):
         super().__init__()
         self.pseudo = pseudonymizer
         self.base_detectors = list(detectors)
         self.detectors = list(detectors)
-        self.registry = Registry(pseudonymizer)
+        self.link_by_name = link_by_name
+        self.registry = Registry(pseudonymizer, link_by_name)
+        self._table = ""
+        self._row_number = 0
+        self._profiles: dict[tuple, _Profile] = {}
+        self._column_actions: dict[tuple, str] = {}
+        self._keep_dates = False
+        self._ai_seen: dict[tuple, list] = {}
+        self._has_ai = any(d.name in _AI_SOURCES for d in detectors)
+        self._ai_off = False  # inside a table cell the AI is not asked about
+        self._ai_only_people = False
         self.collecting = True  # first pass: only gather evidence about who is who
         self.current_file = ""
         self._chunks: list[tuple[str, str, list[Span]]] = []
@@ -138,12 +213,81 @@ class Anonymizer(Transformer):
 
     def finish_collecting(self) -> None:
         """After the first pass: decide who is who, then also replace every value seen anywhere."""
+        self._judge_columns()
+        self._ask_ai_about_free_text_columns()
         self.registry.resolve_records()
         self._find_known_people_in_text()
         self.registry.resolve_mentions()
         self._chunks = []
         self.collecting = False
         self.detectors = self.base_detectors + [KnownValueDetector(self.pseudo)]
+
+    def begin_table(self, name: str) -> None:
+        self._table = name
+        self._row_number = 0
+
+    def _judge_columns(self) -> None:
+        """Columns the header says nothing about are judged by their values. Nothing is assumed:
+        without a header a column that may identify someone is replaced, which can be undone,
+        and Privatier asks. With a header it stays as it is, and Privatier asks."""
+        for key, p in self._profiles.items():
+            if p.filled < _MIN_VALUES:
+                continue
+            named = bool(p.column.key)
+            where = f"{p.label}"
+            if p.share(p.dates) >= _MOST:
+                if named:
+                    self._column_actions[key] = "KEEP_DATES"
+                else:
+                    self._column_actions[key] = "DATE"
+                    self.registry.review.append(
+                        f"{where} has no header and holds dates. It could be a birth date, so it was replaced: "
+                        "please say what it is."
+                    )
+            elif p.share(p.names) >= _ALMOST_ALL and p.varied >= _MOST:
+                if named:
+                    self.registry.review.append(f"{where}: the values look like names. Left unchanged, please check.")
+                else:
+                    self._column_actions[key] = "PERSON"
+                    self.registry.review.append(
+                        f"{where} has no header and the values look like names, so it was replaced: please confirm."
+                    )
+            elif not named and p.share(p.whole) >= _ALMOST_ALL and p.varied >= 0.9:
+                self._column_actions[key] = "ID"
+                self.registry.review.append(
+                    f"{where} has no header and holds a different number in almost every row. It could be an ID, "
+                    "so it was replaced: please say what it is."
+                )
+        for key, action in self._column_actions.items():
+            if action == "PERSON":
+                for value in sorted(self._profiles[key].values):
+                    self.pseudo.token_for("PERSON", value.strip())  # also looked for everywhere else
+
+    def _column_is_free_text(self, key: tuple) -> bool:
+        """A column that repeats a few values holds categories ("Placebo", "T0"), not sentences about people."""
+        p = self._profiles.get(key)
+        if p is None or self._column_actions.get(key) in ("PERSON", "ID", "DATE"):
+            return False
+        return len(p.values) > _MAX_CATEGORIES or p.varied >= _MOST
+
+    def _ai_may_read(self, key: tuple, value) -> bool:
+        return (
+            isinstance(value, str)
+            and not self._column_actions.get(key) == "KEEP_DATES"
+            and self._column_is_free_text(key)
+            and len(value.split()) >= _MIN_WORDS_FOR_AI
+        )
+
+    def _ask_ai_about_free_text_columns(self) -> None:
+        if not any(d.name in _AI_SOURCES for d in self.base_detectors):
+            return
+        for key, profile in self._profiles.items():
+            self.current_file, self._table, _ = key
+            self._ai_only_people = False
+            for value in sorted(profile.values):
+                if self._ai_may_read(key, value):
+                    self.text(value)
+        self._table = ""
 
     def _find_known_people_in_text(self) -> None:
         """A letter about Hannah Berger may only name her in a way that needs the tables to be recognised.
@@ -175,16 +319,25 @@ class Anonymizer(Transformer):
     def file_name(self, value: str) -> str:
         # "Verlauf_Berger" reads as two words to a person, so it has to for the detectors too.
         # In the first pass only rules count: the AI guesses badly here, and a guess must not spread.
-        return self.text(value, use_ai=not self.collecting, read_as=value.replace("_", " "))
+        self._ai_only_people = True  # "Double Valve" is not an organisation
+        try:
+            return self.text(value, use_ai=not self.collecting, read_as=value.replace("_", " "))
+        finally:
+            self._ai_only_people = False
 
     def text(self, value: str, use_ai: bool = True, read_as: str | None = None) -> str:
         if not value or not any(c.isalnum() for c in value):
             return value
         spans = []
         for detector in self.detectors:
-            if detector.name in _AI_SOURCES and not use_ai:
+            if detector.name in _AI_SOURCES and (not use_ai or self._ai_off):
                 continue
-            spans.extend(detector.detect(read_as if read_as is not None else value))
+            found = self._detect(detector, read_as if read_as is not None else value)
+            if detector.name in _AI_SOURCES and self._ai_only_people:
+                found = [s for s in found if s.entity_type == "PERSON"]
+            spans.extend(found)
+        if self._keep_dates:
+            spans = [s for s in spans if s.entity_type != "DATE"]
         spans = [_only_the_name(read_as if read_as is not None else value, s) for s in spans]
         spans = [
             s
@@ -211,6 +364,18 @@ class Anonymizer(Transformer):
             self.tokens.add(token)
         out.append(value[last:])
         return "".join(out)
+
+    def _detect(self, detector: Detector, text: str) -> list[Span]:
+        if detector.name not in _AI_SOURCES:
+            return detector.detect(text)
+        # Tables repeat the same values, and the model is slow. "1,2" or "ok" holds no name.
+        if not _WORTH_ASKING_AI.search(text):
+            return []
+        known = self._ai_seen.get((detector.name, text))
+        if known is None:
+            known = detector.detect(text)
+            self._ai_seen[(detector.name, text)] = known
+        return known
 
     # -- free text ---------------------------------------------------------------
     def _token_for_span(self, value: str, span: Span, spans: list[Span]) -> str:
@@ -288,12 +453,19 @@ class Anonymizer(Transformer):
         if not canonical:
             return None
         spellings = {s for s in (canonical, first, last) if s}
+        row = None if self.link_by_name else (self.current_file, self._table, self._row_number)
         return Record(
-            name_key(canonical), " ".join(canonical.split()), first, last, birth, frozenset(ids), gender, set(), spellings
+            name_key(canonical), " ".join(canonical.split()), first, last, birth, frozenset(ids), gender, set(),
+            spellings, row,
         )
 
     def row(self, columns: list[Column], values: list) -> list:
+        if _is_legend_row(values):  # "(dd/mm/yyyy)", "(0=no,1=yes)": explains the columns, holds no data
+            return [self.header(v) if isinstance(v, str) else v for v in values]
+        self._row_number += 1
         columns = _with_name_roles(columns)
+        if self.collecting:
+            self._profile_row(columns, values)
         record = self._record_of_row(columns, values)
         person: Person | None = None
         if record is not None:
@@ -305,12 +477,39 @@ class Anonymizer(Transformer):
         self._row_person = person
         for i, value in enumerate(values):
             column = _column_at(columns, i)
+            action = self._column_actions.get((self.current_file, self._table, i))
             if column.category == "PERSON" and column.role in _NAME_ROLES and not _blank(value):
                 out.append(self._person_cell(column, value, person))
+            elif action in ("PERSON", "ID", "DATE") and not _blank(value):
+                token = self.pseudo.token_for(action, _cell_text(value).strip())
+                self.stats[action] += 1
+                self.tokens.add(token)
+                out.append(token)
             else:
-                out.append(self.cell(column.category, value))
+                self._keep_dates = action == "KEEP_DATES" or (column.category is None and column.dates)
+                # In the first pass the AI waits until the whole column was seen.
+                self._ai_off = self.collecting or not self._ai_may_read((self.current_file, self._table, i), value)
+                new = self.cell(column.category, value)
+                if not self._ai_off and not self.collecting and new != value and self._has_ai:
+                    note = f"the AI changed free text in column {_letters(i)}{' of ' + self._table if self._table else ''}, please check."
+                    if note not in self.warnings:
+                        self.warnings.append(note)
+                out.append(new)
+                self._keep_dates = self._ai_off = False
         self._row_person = None
         return out
+
+    def _profile_row(self, columns: list[Column], values: list) -> None:
+        for i, value in enumerate(values):
+            column = _column_at(columns, i)
+            if column.category is not None or column.role == "gender" or _blank(value):
+                continue
+            key = (self.current_file, self._table, i)
+            profile = self._profiles.get(key)
+            if profile is None:
+                label = f"{self.current_file}, {self._table + ', ' if self._table else ''}column {_letters(i)}"
+                profile = self._profiles[key] = _Profile(column, label)
+            profile.add(value)
 
     def labelled(self, category: str, value: str):
         new = self.text(value)

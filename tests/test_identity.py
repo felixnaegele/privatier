@@ -42,7 +42,8 @@ def test_same_name_different_birth_date_are_different_people(tmp_path):
     )
     rows = table(out, "a.csv")
     assert rows[1][0] != rows[2][0] and rows[1][1] != rows[2][1]
-    assert any("same name" in note for _, note in summary.warnings)
+    assert summary.warnings == []  # the birth dates settled it: nothing to ask
+    assert "identity_settled" in (tmp_path / "Studie_privatier" / "audit.jsonl").read_text(encoding="utf-8")
 
 
 def test_same_name_same_birth_year_only_the_full_date_tells_them_apart(tmp_path):
@@ -152,10 +153,18 @@ def test_ambiguous_mention_is_kept_apart_and_flagged(tmp_path):
     assert any(file == "b.txt" and "different people" in n for file, n in summary.warnings)
 
 
-def test_surname_links_to_the_one_person_in_the_same_document(tmp_path):
-    out, _ = run(tmp_path, {"a.txt": "Patientin Anna Schmidt, geb. 12.05.1975. Frau Schmidt war zufrieden.\n"})
+def test_surname_alone_is_kept_apart_and_flagged_not_assumed(tmp_path):
+    out, summary = run(tmp_path, {"a.txt": "Patientin Anna Schmidt, geb. 12.05.1975. Frau Schmidt war zufrieden.\n"})
     text = (out / "a.txt").read_text(encoding="utf-8")
-    assert "Patientin PERSON_0001," in text and "Frau PERSON_0001_L " in text
+    assert "Patientin PERSON_0001," in text and "Frau PERSON_0001" not in text and "Schmidt" not in text
+    assert any("may belong to PERSON_0001" in note for _, note in summary.warnings)
+
+
+def test_surname_links_when_the_user_says_so(tmp_path):
+    out, _ = run(
+        tmp_path, {"a.txt": "Patientin Anna Schmidt, geb. 12.05.1975. Frau Schmidt war zufrieden.\n"}, link_by_name=True
+    )
+    assert "Frau PERSON_0001_L " in (out / "a.txt").read_text(encoding="utf-8")
 
 
 def test_surname_is_not_linked_when_two_people_in_the_document_fit(tmp_path):
@@ -415,18 +424,21 @@ def test_form_codes_survive_the_key_file():
 # --- found by testing on hard German data (tools/hard_data.py) ---------------------
 def test_mother_in_the_letter_does_not_take_over_the_patients_surname(tmp_path):
     """The real mix-up: "Frau Berger" got the mother's code, as she was the only Berger recognised."""
-    out, _ = run(
-        tmp_path,
-        {
-            "a.csv": "Name;Score\nHannah Berger;1\n",
-            "b.txt": "Betreff Hannah Berger. Frau Berger kam mit ihrer Mutter Ingeborg Berger.\n",
-        },
-    )
+    files = {
+        "a.csv": "Name;Geburtsdatum\nHannah Berger;24.06.1990\n",
+        "b.txt": "Betreff Hannah Berger, geb. 24.06.1990. Frau Berger kam mit ihrer Mutter Ingeborg Berger.\n",
+    }
+    out, _ = run(tmp_path, files)
     text = (out / "b.txt").read_text(encoding="utf-8")
     hannah = table(out, "a.csv")[1][0]
-    assert f"Frau {hannah}_L" in text
     mother = re.search(r"Mutter (PERSON_\d+)", text).group(1)
     assert mother != hannah
+    assert not re.search(rf"Frau {mother}", text)
+
+    other = tmp_path / "with_answer"
+    other.mkdir()
+    out, _ = run(other, files, link_by_name=True)
+    assert f"Frau {table(out, 'a.csv')[1][0]}_L" in (out / "b.txt").read_text(encoding="utf-8")
 
 
 def test_birth_date_written_with_a_month_name_counts(tmp_path):
@@ -505,11 +517,16 @@ def test_a_single_ai_guess_does_not_spread(tmp_path):
     assert text.startswith("Vater ist da. Lange Zeit gut. Gruppe A.") and "Thomas" not in text
 
 
-def test_note_in_a_table_row_belongs_to_that_rows_person(tmp_path):
-    out, _ = run(
-        tmp_path,
-        {"a.csv": "Name;Geburtsdatum;Bemerkung\nMax Schäfer;01.01.1950;Herr Schäfer kam\nEva Schäfer;02.02.1960;Frau Schäfer kam\n"},
-    )
+def test_note_in_a_table_row_is_flagged_and_links_only_when_told(tmp_path):
+    files = {"a.csv": "Name;Geburtsdatum;Bemerkung\nMax Schäfer;01.01.1950;Herr Schäfer kam\nEva Schäfer;02.02.1960;Frau Schäfer kam\n"}
+    out, summary = run(tmp_path, files)
+    rows = table(out, "a.csv")
+    assert "Schäfer" not in str(rows) and f"Herr {rows[1][0]}" not in rows[1][2]
+    assert any("note may refer to" in note for _, note in summary.warnings)
+
+    other = tmp_path / "with_answer"
+    other.mkdir()
+    out, _ = run(other, files, link_by_name=True)
     rows = table(out, "a.csv")
     assert rows[1][2].startswith(f"Herr {rows[1][0]}_L") and rows[2][2].startswith(f"Frau {rows[2][0]}_L")
 
@@ -675,13 +692,12 @@ def test_particles_and_professional_titles(tmp_path):
     assert "wohnt sie" in text
 
 
-def test_surname_of_several_words_links_within_the_document(tmp_path):
-    out, _ = run(
-        tmp_path,
-        {"a.txt": "Gutachten über Herrn Willem van den Berg, geb. 30.04.1955. Herr van den Berg war kooperativ.\n"},
-    )
-    text = (out / "a.txt").read_text(encoding="utf-8")
-    assert "Herrn PERSON_0001," in text and "Herr PERSON_0001_" in text and "Berg" not in text
+def test_surname_of_several_words_is_flagged_within_the_document(tmp_path):
+    text = "Gutachten über Herrn Willem van den Berg, geb. 30.04.1955. Herr van den Berg war kooperativ.\n"
+    out, summary = run(tmp_path, {"a.txt": text})
+    result = (out / "a.txt").read_text(encoding="utf-8")
+    assert "Herrn PERSON_0001," in result and "Herr PERSON_0001" not in result and "Berg" not in result
+    assert any("may belong to PERSON_0001" in note for _, note in summary.warnings)
 
 
 def test_file_name_comes_back_exactly_when_read_with_spaces(tmp_path):
@@ -702,3 +718,244 @@ def test_file_name_comes_back_exactly_when_read_with_spaces(tmp_path):
     assert "Schulz" not in str(list((tmp_path / "Studie_anonymized").rglob("*")))
     restored = round_trip(tmp_path, tmp_path / "Studie_anonymized")
     assert (restored / "Schulz_Peter_1" / "a.txt").exists()
+
+
+# --- tables first: what real study files showed -----------------------------------
+def excel(tmp_path, rows, name="a.xlsx"):
+    src = tmp_path / "Studie"
+    src.mkdir(exist_ok=True)
+    wb = Workbook()
+    for row in rows:
+        wb.active.append(row)
+    wb.save(src / name)
+    return src
+
+
+def output_rows(tmp_path, name="a.xlsx"):
+    return [list(r) for r in load_workbook(tmp_path / "Studie_anonymized" / name).active.iter_rows(values_only=True)]
+
+
+@pytest.mark.parametrize(
+    "header",
+    ["code_sex", "Mitralvalve_repair_code", "ENDOCARDITIS_CODE", "PoorMobility", "Mobility", "Mitralstenosis", "group",
+     "visit_type", "SEX1=Male,2=Female", "Hypertension", "PreoperativeCTscan", "Above_75"],
+)
+def test_clinical_columns_are_not_mistaken_for_identifiers(header):
+    from privatier.tables import classify_header
+
+    assert classify_header(header) is None
+
+
+@pytest.mark.parametrize(
+    "header, category",
+    [("Forename", "PERSON"), ("Family name", "PERSON"), ("Surname", "PERSON"), ("Given name", "PERSON"),
+     ("Patient Name", "PERSON"), ("Last_Name", "PERSON"), ("LastName", "PERSON"), ("GP", "PERSON"), ("Surgeon", "PERSON"),
+     ("Consultant", "PERSON"), ("Investigator", "PERSON"), ("Next of kin", "PERSON"), ("D.O.B.", "DOB"), ("DOB", "DOB"),
+     ("Dateofbirth", "DOB"), ("Date of Birth", "DOB"), ("Birthdate", "DOB"), ("Year of birth", "BIRTH_YEAR"),
+     ("NHS number", "ID"), ("MRN", "ID"), ("SSN", "ID"), ("HospitalID", "ID"), ("Hospital Number", "ID"),
+     ("StudyID", "ID"), ("ParticipantID", "ID"), ("Record ID", "ID"), ("Subject Code", "ID"), ("CenterPat_ID", "ID"),
+     ("Postcode", "ADDRESS"), ("ZIP", "ADDRESS"), ("Town", "ADDRESS"), ("City", "ADDRESS"), ("Street Address", "ADDRESS"),
+     ("Telephone", "PHONE"), ("Mobile", "PHONE"), ("Email", "EMAIL")],
+)
+def test_english_headers(header, category):
+    from privatier.tables import classify_header
+
+    assert classify_header(header) == category
+
+
+def test_every_clinical_value_stays_exactly_as_it_was(tmp_path):
+    rows = [
+        ["id", "Last_Name", "Name", "Dateofbirth", "AGE", "Weight", "LVEF", "Group", "Status"],
+        ["(n)", "(text)", "(text)", "(dd/mm/yyyy)", "(y)", "(kg)", "(%)", "(0=no,1=yes)", "(1=a,2=b)"],
+        [1, "Long", "Mark", dt.datetime(1950, 1, 2), 70, "79,5", 55.5, "Intervention", "alive"],
+        [2, "White", "Grace", dt.datetime(1960, 3, 4), 60, 80, 40, "Control", "lost to follow up"],
+    ]
+    anonymize_folder(excel(tmp_path, rows), PASSWORD)
+    result = output_rows(tmp_path)
+    assert result[1] == rows[1]  # the legend row explains the columns, it is not data
+    for before, after in zip(rows[2:], result[2:]):
+        assert after[4:] == before[4:]
+        assert str(before[1]) not in str(after) and str(before[2]) not in str(after)
+
+
+def test_dates_as_text_are_kept_like_real_dates_in_the_same_column(tmp_path):
+    rows = [["Patient ID", "Date of surgery", "Dateofredo", "Note"]]
+    rows += [[f"P{i}", dt.datetime(2020, 1, i + 1), f"{i + 1}.3.2021", "Mr Long called on 3.4.2021"] for i in range(6)]
+    _, = anonymize_folder(excel(tmp_path, rows), PASSWORD), 
+    result = output_rows(tmp_path)
+    assert result[1][1] == dt.datetime(2020, 1, 1) and result[1][2] == "1.3.2021"
+    assert "3.4.2021" not in result[1][3] and "Long" not in result[1][3]
+
+
+def test_date_column_is_found_by_its_values_when_the_header_says_nothing(tmp_path):
+    rows = [["Patient ID", "re-hospital"]] + [[f"P{i}", f"{i + 1}.3.2021 Reflux"] for i in range(6)]
+    anonymize_folder(excel(tmp_path, rows), PASSWORD)
+    assert output_rows(tmp_path)[1][1] == "1.3.2021 Reflux"
+
+
+def test_column_without_header_holding_names_is_replaced_and_asked_about(tmp_path):
+    names = ["Long", "O'Neill", "Müller", "van den Berg", "White", "Nguyen", "Klein"]
+    rows = [[None, "numbering"]] + [[n, i] for i, n in enumerate(names)]
+    summary = anonymize_folder(excel(tmp_path, rows), PASSWORD)
+    result = output_rows(tmp_path)
+    assert not any(n in str(result) for n in names)
+    assert [r[1] for r in result[1:]] == list(range(7))
+    assert any("no header" in note and "names" in note and "column A" in note for _, note in summary.warnings)
+
+
+def test_column_without_header_holding_dates_could_be_birth_dates(tmp_path):
+    rows = [[None, "numbering"]] + [[dt.datetime(1950 + i, 1, 2), i] for i in range(6)]
+    summary = anonymize_folder(excel(tmp_path, rows), PASSWORD)
+    assert "19" not in str(output_rows(tmp_path)[1][0])
+    assert any("no header" in note and "dates" in note for _, note in summary.warnings)
+
+
+def test_column_without_header_holding_unique_numbers_could_be_an_id(tmp_path):
+    rows = [[None, "numbering"]] + [[900000 + i, i] for i in range(6)]
+    summary = anonymize_folder(excel(tmp_path, rows), PASSWORD)
+    assert str(output_rows(tmp_path)[1][0]).startswith("ID_")
+    assert any("no header" in note and "ID" in note for _, note in summary.warnings)
+
+
+def test_named_column_that_looks_like_names_is_left_and_asked_about(tmp_path):
+    names = ["Long", "Smith", "Taylor", "Young", "Brown", "Green"]
+    rows = [["Kürzel", "Score"]] + [[n, i] for i, n in enumerate(names)]
+    summary = anonymize_folder(excel(tmp_path, rows), PASSWORD)
+    assert output_rows(tmp_path)[1][0] == "Long"
+    assert any("look like names" in note and "column A" in note for _, note in summary.warnings)
+
+
+def test_categories_with_few_values_are_not_taken_for_names(tmp_path):
+    rows = [["Klappe", "Score"]] + [["St Jude" if i % 2 else "Edwards", i] for i in range(20)]
+    summary = anonymize_folder(excel(tmp_path, rows), PASSWORD)
+    assert output_rows(tmp_path)[1][0] == "Edwards"
+    assert not any("column A" in note for _, note in summary.warnings)
+
+
+def test_repeated_name_without_evidence_is_not_assumed_to_be_one_person(tmp_path):
+    files = {"a.csv": "Name;Score\nFenja Jansen;1\nFenja Jansen;2\n"}
+    out, summary = run(tmp_path, files)
+    rows = table(out, "a.csv")
+    assert rows[1][0] != rows[2][0]
+    assert any("may be" in note for _, note in summary.warnings)
+
+    other = tmp_path / "with_answer"
+    other.mkdir()
+    out, _ = run(other, files, link_by_name=True)
+    rows = table(out, "a.csv")
+    assert rows[1][0] == rows[2][0]
+
+
+def test_same_name_across_files_without_evidence_is_asked_about(tmp_path):
+    out, summary = run(tmp_path, {"a.csv": "Name;Score\nAna Ruiz;1\n", "b.csv": "Name;Score\nAna Ruiz;2\n"})
+    assert table(out, "a.csv")[1][0] != table(out, "b.csv")[1][0]
+    assert any("may be" in note for _, note in summary.warnings)
+
+
+def test_ambiguous_day_month_match_is_flagged(tmp_path):
+    out, summary = run(tmp_path, {"a.csv": "Name;DOB\nAna Ruiz;03/04/1975\nAna Ruiz;1975-04-03\n"})
+    rows = table(out, "a.csv")
+    assert rows[1][0].split("_")[1] == rows[2][0].split("_")[1]
+    assert any("two ways" in note for _, note in summary.warnings)
+
+
+def test_ids_link_people_across_files_without_any_names(tmp_path):
+    rows = [["randomisation_id", "BL_EF"]] + [[f"{i}A", 50 + i] for i in range(3)]
+    src = excel(tmp_path, rows, "1_baseline.xlsx")
+    wb = Workbook()
+    for r in [["randomisation_id", "visit_date", "ef"], ["1A", dt.datetime(2022, 1, 1), 44]]:
+        wb.active.append(r)
+    wb.save(src / "2_mri.xlsx")
+    anonymize_folder(src, PASSWORD)
+    a, b = output_rows(tmp_path, "1_baseline.xlsx"), output_rows(tmp_path, "2_mri.xlsx")
+    assert a[2][0] == b[1][0] and a[2][0].startswith("ID_")
+
+
+def test_spss_coded_columns_with_code_in_the_name_stay(tmp_path):
+    src = tmp_path / "Studie"
+    src.mkdir()
+    df = pd.DataFrame({"pat_id": [1000.0, 1001.0], "code_sex": [1.0, 2.0], "ENDOCARDITIS_CODE": [0.0, 1.0]})
+    pyreadstat.write_sav(df, str(src / "a.sav"))
+    anonymize_folder(src, PASSWORD)
+    out, _ = pyreadstat.read_sav(str(tmp_path / "Studie_anonymized" / "a.sav"))
+    assert list(out["code_sex"]) == [1.0, 2.0] and list(out["ENDOCARDITIS_CODE"]) == [0.0, 1.0]
+    assert out["pat_id"].iloc[0].startswith("ID_")
+
+
+# --- English ----------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "keep",
+    ["White blood cells", "Long term", "May be", "in May", "Young patients", "Black stools", "Parkinson's disease",
+     "Crohn's disease", "Kaplan-Meier", "Mann-Whitney", "Carpentier classification", "Alfieri stitch", "Will be seen"],
+)
+def test_english_words_survive_people_with_such_surnames(tmp_path, keep):
+    out, _ = run(
+        tmp_path,
+        {
+            "a.csv": "Name;DOB\nMia White;01/13/1980\nTom Long;01/14/1981\nJana May;01/15/1982\nEve Young;01/16/1983\n"
+                     "Kim Black;01/17/1984\nAl Parkinson;01/18/1985\nJo Crohn;01/19/1986\nDan Will;01/20/1987\n"
+                     "Lea Carpentier;01/21/1988\nSam Alfieri;01/22/1989\n",
+            "b.txt": f"Before this. {keep} and so on.\n",
+        },
+    )
+    assert keep in (out / "b.txt").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "text, gone",
+    [
+        ("Seen with his wife Mary Jones today.", ["Mary", "Jones"]),
+        ("His daughter, Emily, called back.", ["Emily"]),
+        ("Dear Dr Thompson, thank you.", ["Thompson"]),
+        ("Dear Mrs. O'Brien,", ["O'Brien"]),
+        ("Mr Smith's wife called.", ["Smith"]),
+        ("John Smith, DOB 03/14/1955, was admitted.", ["John", "Smith", "03/14/1955"]),
+        ("Jane Doe (born 1961) attended.", ["Jane", "Doe"]),
+        ("Patient: Doe, Jane", ["Doe", "Jane"]),
+        ("NHS Number: 943 476 5919", ["943 476 5919"]),
+        ("MRN 00123456, SSN 123-45-6789", ["00123456", "123-45-6789"]),
+        ("Lives at 42 Oak Street, Boston, MA 02115.", ["Oak Street", "Boston", "02115"]),
+        ("Address: 10 High Road, London SW1A 1AA", ["SW1A 1AA"]),
+        ("Call 07700 900123 or (617) 555-0199.", ["(617) 555-0199"]),
+        ("Consultant Sarah Patel reviewed her.", ["Sarah", "Patel"]),
+        ("Sent to j.smith@hospital.example", ["j.smith"]),
+    ],
+)
+def test_english_text(tmp_path, text, gone):
+    out, _ = run(tmp_path, {"a.txt": text + "\n"})
+    result = (out / "a.txt").read_text(encoding="utf-8")
+    assert [g for g in gone if g in result] == []
+
+
+class EagerAI:
+    """Guesses like the real model on table cells without context."""
+
+    name = "ner"
+    GUESSES = {"Placebo": "ORG", "T0": "PERSON", "Aortic Stenosis": "PERSON", "Double Valve": "ORG", "Kim Ross": "PERSON"}
+
+    def detect(self, text):
+        from privatier.detect.base import Span
+
+        return [
+            Span(m.start(), m.end(), etype, word, "ner", 0.9)
+            for word, etype in self.GUESSES.items()
+            for m in re.finditer(rf"(?<!\w){re.escape(word)}(?!\w)", text)
+        ]
+
+
+def test_the_ai_is_only_asked_about_real_free_text_in_tables(tmp_path):
+    from privatier.detect import PatternDetector
+
+    src = tmp_path / "Studie"
+    src.mkdir()
+    header = "ID;Arm;Visit;Diagnosis;Notes\n"
+    rows = "".join(
+        f"P{i};Placebo;T0;Aortic Stenosis;Note number {i} from the ward\n" for i in range(25)
+    ) + "P99;Placebo;T0;Aortic Stenosis;Kim Ross called the ward\n"
+    (src / "Double_Valve.csv").write_text(header + rows, encoding="utf-8")
+    anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), EagerAI()])
+    out = tmp_path / "Studie_anonymized" / "Double_Valve.csv"
+    assert out.exists()
+    lines = out.read_text(encoding="utf-8-sig").splitlines()
+    assert lines[1].split(";")[1:4] == ["Placebo", "T0", "Aortic Stenosis"]
+    assert "Kim Ross" not in lines[-1] and "called the ward" in lines[-1]

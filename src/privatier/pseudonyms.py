@@ -171,7 +171,7 @@ class KnownValueDetector:
         self._regex = (
             re.compile(
                 # Boundaries: a letter or digit may not touch the match, but "_" may ("Arztbrief_Schmidt").
-                r"(?<![^\W_])((?:" + "|".join(re.escape(a).replace(r"\ ", r"\s+") for a in alternatives) + r")(?:s|')?)(?![^\W_])"
+                r"(?<![^\W_])((?:" + "|".join(re.escape(a).replace(r"\ ", r"\s+") for a in alternatives) + r")(?:'s|s'|s|')?)(?![^\W_])"
             )
             if alternatives
             else None
@@ -185,8 +185,8 @@ class KnownValueDetector:
             matched = m.group(1)
             whole = " ".join(matched.split())
             etype = self._type_of.get(whole)
-            if etype is None:  # the genitive: "Herr Müllers", "Frau Schulz'"
-                base = whole[:-1]
+            if etype is None:  # the genitive: "Herr Müllers", "Frau Schulz'", "Mr Smith's"
+                base = re.sub(r"(?:'s|s'|s|')$", "", whole)
                 etype = self._type_of.get(base)
                 if etype is None or etype != "PERSON" or len(base) < 4:
                     continue  # "Mais" is not the genitive of the surname Mai

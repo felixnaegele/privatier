@@ -120,6 +120,7 @@ def anonymize_folder(
     work_dir: Path | None = None,
     use_ai: bool = False,
     detectors: list | None = None,
+    link_by_name: bool = False,
 ) -> Summary:
     input_dir = Path(input_dir).resolve()
     default_out, default_work = default_paths(input_dir)
@@ -143,7 +144,7 @@ def anonymize_folder(
         with offline():  # the AI model must load from disk only
             detectors = build_detectors(use_ai)
     work_dir.mkdir(parents=True, exist_ok=True)  # only once everything is ready
-    anon = Anonymizer(pseudo, detectors)
+    anon = Anonymizer(pseudo, detectors, link_by_name)
     audit = AuditLog(work_dir / AUDIT_FILE)
     summary = Summary(output_dir)
     files = _list_files(input_dir)
@@ -174,6 +175,8 @@ def anonymize_folder(
         summary.warnings.extend(project_review)
         for file, note in project_review:
             audit.write("identity_review", file=file, note=note)
+        for note in dict.fromkeys(anon.registry.settled):
+            audit.write("identity_settled", note=note)
 
         # Pass 2: write the anonymised copy.
         output_dir.mkdir(parents=True)

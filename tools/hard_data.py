@@ -363,7 +363,7 @@ def mention_checks(out: Path, texts: dict[str, str]) -> list[tuple[bool, str]]:
         (f"Herrn {code['max62']}," in letter or f"Patienten Herrn {code['max62']}" in letter,
          "Letter links 'Herrn Max Müller, geb. 03.11.1962' to the right Max"),
         (code["max75"] not in letter, "Letter never uses the other Max Müller's code"),
-        (f"{code['max62']}_" in letter, "'Herr Müller' in the letter links to that Max (surname code)"),
+        (f"{code['max62']}_L" not in letter, "'Herr Müller' is not assumed to be that Max: kept apart and flagged"),
     ]
     note = next((v for k, v in texts.items() if k.endswith("Entlassbrief") or "Entlassbrief" in k and "[path]" not in k), "")
     results.append((code["ayse"] in note, "Discharge letter links Frau Ayşe Öztürk by birth date"))

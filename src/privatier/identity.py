@@ -9,14 +9,13 @@ birth date in free text), and only then are people told apart:
   * Same name + different birth date                  -> different people
   * Same name + different patient ID in the same kind
     of column                                         -> different people
-  * Same name, no evidence either way                 -> linked only if exactly one
-                                                         person fits, and flagged
+  * Same name, no evidence either way                 -> kept apart, and Privatier asks
 
-The rule behind all of this: when in doubt, keep people apart and say so.
-Wrongly merging two patients would silently corrupt research data; keeping one
-patient apart under two codes can be seen and fixed. Everything that was not
-certain is flagged for review, using codes only, so that real names never reach
-the audit log or the screen.
+The rule behind all of this: Privatier never assumes. What the data does not
+settle stays apart and becomes a question, using codes only, so that real names
+never reach the audit log or the screen. One switch answers the most common
+question for a whole project: link_by_name says that an identical name without
+any evidence is the same person.
 """
 
 from __future__ import annotations
@@ -172,10 +171,12 @@ class Record:
     gender: str | None = None
     files: set[str] = field(default_factory=set)
     spellings: set[str] = field(default_factory=set)
+    row: tuple | None = None  # without evidence, a row only speaks for itself
 
     @property
     def identity(self) -> tuple:
-        return (self.key, self.birth.key if self.birth else None, tuple(sorted(self.ids)))
+        place = self.row if not (self.birth or self.ids) else None
+        return (self.key, self.birth.key if self.birth else None, tuple(sorted(self.ids)), place)
 
 
 @dataclass
@@ -249,6 +250,11 @@ class Person:
         )
 
 
+def _fits(a: BirthDate, b: BirthDate) -> bool:
+    """The same date, or only a year is known and it fits ("Jg. 1961" and 23.08.1961)."""
+    return bool(a.dates & b.dates) or ((not a.dates or not b.dates) and a.same_person_possible(b))
+
+
 class Mention(NamedTuple):
     text: str
     gender: str | None
@@ -268,8 +274,9 @@ class FileEvidence:
 
 # --------------------------------------------------------------------------- registry
 class Registry:
-    def __init__(self, pseudonymizer: Pseudonymizer):
+    def __init__(self, pseudonymizer: Pseudonymizer, link_by_name: bool = False):
         self.pseudo = pseudonymizer
+        self.link_by_name = link_by_name
         self.records: dict[tuple, Record] = {}
         self.files: dict[str, FileEvidence] = {}
         self.people: list[Person] = [Person.from_dict(p) for p in pseudonymizer.people]
@@ -278,7 +285,8 @@ class Registry:
         for person in self.people:
             self._by_key.setdefault(person.key, []).append(person)
         self._record_owner: dict[tuple, Person] = {}
-        self.review: list[str] = []  # project-wide findings, codes only
+        self.review: list[str] = []  # questions for the user, codes only
+        self.settled: list[str] = []  # decided by the data, for the audit log only
 
     def file(self, name: str) -> FileEvidence:
         return self.files.setdefault(name, FileEvidence())
@@ -344,12 +352,13 @@ class Registry:
         self._register_spellings()
         for key, people in self._by_key.items():
             if len(people) > 1:
+                # Birth dates or IDs settled this, so there is nothing to ask. It stays on record.
                 codes = ", ".join(p.token for p in people)
-                self.review.append(f"{codes} have the same name but were kept apart as different people.")
-        owners: dict[str, list[str]] = {}
+                self.settled.append(f"{codes} have the same name but are different people, by birth date or ID.")
+        owners: dict[tuple[str, str], list[str]] = {}
         for person in self.people:
-            for value in sorted({v for _, v in person.ids}):
-                owners.setdefault(value, []).append(person.token)
+            for column_value in sorted(person.ids):
+                owners.setdefault(column_value, []).append(person.token)
         for shared in dict.fromkeys(tuple(tokens) for tokens in owners.values() if len(tokens) > 1):
             self.review.append(
                 f"{', '.join(shared)} are different people with the same ID number in the original data. "
@@ -389,8 +398,8 @@ class Registry:
         chosen: Person | None = None
         if len(sharing) == 1:
             chosen = sharing[0]
-        elif not sharing and len(fitting) == 1:
-            chosen = fitting[0]  # nothing contradicts it, but nothing confirms it either
+        elif not sharing and len(fitting) == 1 and self.link_by_name:
+            chosen = fitting[0]  # the user said an identical name is the same person
         if chosen is None:
             chosen = self._new_person(record)
             self._flag_same_birth_different_id(chosen, same_name, record)
@@ -399,11 +408,16 @@ class Registry:
                     f"{chosen.token}: not enough information to tell which of "
                     f"{', '.join(p.token for p in fitting)} this is, so it was kept apart."
                 )
-        else:
-            if not sharing:
+            elif len(fitting) == 1:
                 self.review.append(
-                    f"{chosen.token}: some records were linked by name only, with no birth date or ID "
-                    "confirming they are the same person."
+                    f"{chosen.token} may be {fitting[0].token}: same name, but no birth date or ID confirms it, "
+                    "so they were kept apart."
+                )
+        else:
+            read_two_ways = [b for b in (record.birth, *chosen.births) if b and len(b.dates) > 1]
+            if read_two_ways:
+                self.review.append(
+                    f"{chosen.token}: a birth date could be read two ways (day/month), and one reading matched."
                 )
             chosen.absorb(record)
         self._record_owner[record.identity] = chosen
@@ -431,7 +445,7 @@ class Registry:
         found = [
             p
             for p in people
-            if any(b.dates & o.dates for b in births for o in p.births) or ids & {v for _, v in p.ids}
+            if any(_fits(b, o) for b in births for o in p.births) or ids & {v for _, v in p.ids}
         ]
         return found[0] if len(found) == 1 else None
 
@@ -443,14 +457,13 @@ class Registry:
             exact = self._evidence_match(people, [birth], set())
             if exact is not None:
                 return exact
-            undated = [p for p in people if not any(birth.same_person_possible(b) is False for b in p.births)]
-            return undated[0] if len(undated) == 1 else None
+            return None
         evidence = self.file(file)
         exact = self._evidence_match(people, evidence.birth_dates, evidence.ids)
         if exact is not None:
             return exact
-        if len(people) == 1 and not academic:
-            return people[0]
+        if len(people) == 1 and not academic and (self.link_by_name or file in people[0].files):
+            return people[0]  # the same full name in the document it was found in
         return None
 
     def person_for_mention(
@@ -469,23 +482,26 @@ class Registry:
         if len(parts) >= 2:
             person = self._match_full_name(text, file, academic, birth)
             if person is None and (part_of := self._surname_of_someone_here(text, file)) is not None:
-                return part_of, None
+                if self.link_by_name:
+                    return part_of, None
+                return None, f"a surname here may belong to {part_of.token}: kept apart, please check."
             if person is None:
                 count = len(self._by_key.get(name_key(text), []))
                 if count > 1:
                     return None, f"a name here fits {count} different people, so it was kept apart from them."
                 if count == 1:
-                    return None, "a name here matches someone else in the project; it was kept apart (it has a "\
-                                 "doctor's title or a different birth date), please check."
+                    return None, f"a name here may be {self._by_key[name_key(text)][0].token}: same name, but nothing "\
+                                 "confirms it, so it was kept apart."
                 return None, None
-            if not person.has_evidence and len(person.files) > 1:
-                return person, f"{person.token}: linked across files by name only, please check."
-            if person.has_evidence and file not in {f for f in person.files if self._confirmed(person, f)}:
-                return person, f"{person.token}: linked to a record in another file by name only, please check."
             return person, None
         if row_person is not None and self._part_fits(parts[0], row_person):
-            return row_person, None  # a note in the row of the person it is about
-        return self._match_single_name(parts[0], file, gender), None
+            if self.link_by_name:
+                return row_person, None
+            return None, f"a name in a note may refer to {row_person.token}: kept apart, please check."
+        candidate = self._match_single_name(parts[0], file, gender)
+        if candidate is not None and not self.link_by_name:
+            return None, f"a surname here may belong to {candidate.token}: kept apart, please check."
+        return candidate, None
 
     def _surname_of_someone_here(self, text: str, file: str) -> Person | None:
         """A surname of several words: all of them belong to exactly one longer name in this document."""
@@ -498,13 +514,6 @@ class Registry:
             if words < set(self._by_token[token].key)
         ]
         return fitting[0] if len(fitting) == 1 else None
-
-    def _confirmed(self, person: Person, file: str) -> bool:
-        evidence = self.file(file)
-        return self._evidence_match([person], evidence.birth_dates, evidence.ids) is person or any(
-            r.files and file in r.files and self._record_owner.get(r.identity) is person
-            for r in self.records.values()
-        )
 
     def _match_single_name(self, part: str, file: str, gender: str | None) -> Person | None:
         """"Herr Müller" can only be linked if one person in this very document fits."""

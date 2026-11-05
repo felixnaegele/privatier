@@ -17,10 +17,15 @@ _DOC_PROPERTIES = ("title", "subject", "description", "keywords", "category")
 
 def _find_header_row(ws) -> int | None:
     """The first row that looks like column headers (mostly text)."""
-    for r, row in enumerate(ws.iter_rows(min_row=1, max_row=_HEADER_SEARCH_ROWS, values_only=True), start=1):
+    rows = list(ws.iter_rows(min_row=1, max_row=_HEADER_SEARCH_ROWS + 1, values_only=True))
+    for r, row in enumerate(rows[:_HEADER_SEARCH_ROWS], start=1):
         filled = [v for v in row if v not in (None, "")]
         texts = [v for v in filled if isinstance(v, str)]
         if filled and len(texts) >= max(1, len(filled) * 0.6) and (len(texts) >= 2 or len(row) == 1):
+            return r
+        # A sheet where only one column has a header: text above a row that holds other kinds of values.
+        following = rows[r] if r < len(rows) else ()
+        if filled and len(texts) == len(filled) and any(isinstance(v, (int, float)) or hasattr(v, "year") for v in following):
             return r
     return None
 
@@ -58,6 +63,7 @@ class ExcelHandler(SameNameMixin):
     def process(self, src: Path, dst: Path | None, t: Transformer) -> None:
         wb = load_workbook(src, keep_vba=src.suffix.lower() == ".xlsm")
         for ws in wb.worksheets:
+            t.begin_table(ws.title)
             header_row = _find_header_row(ws)
             columns = []
             if header_row:
@@ -82,7 +88,7 @@ class ExcelHandler(SameNameMixin):
                         continue
                     _store(cell, t.header(value) if row[0].row == header_row else t.text(value))
             _page_margins(ws, t)
-            new_title = t.text(ws.title)[:31]
+            new_title = t.header(ws.title)[:31]  # like a column name: short, without context for the AI
             if new_title != ws.title:
                 ws.title = new_title
         wb.properties.creator = None

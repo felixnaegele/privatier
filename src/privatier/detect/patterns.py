@@ -42,13 +42,21 @@ _NOT_NAMES = {
     "Enkel", "Enkelin", "Familie", "Betreuer", "Betreuerin", "Partner", "Partnerin", "Angehörige", "Angehöriger",
     "Rücksprache", "Rückruf", "Termin", "Kontrolle", "Nach", "Am", "Seit", "Bei", "Wegen",
     "Lebensgefährte", "Lebensgefährtin", "Mann", "Onkel", "Tante", "Neffe", "Nichte", "Dolmetscher", "Dolmetscherin",
+    "Son", "Daughter", "Wife", "Husband", "Mother", "Father", "Brother", "Sister", "Family", "Guardian", "Caregiver",
+    "Interpreter", "Dear", "Mr", "Mrs", "Ms", "Miss", "Dr", "Prof", "He", "She", "They", "The", "This", "We", "Disease",
+    "Syndrome", "Diagnosis", "Treatment", "Discharge", "Admission", "Follow", "Contact", "Date",
     "Frau", "Herr", "Herrn", "Sie", "Er", "Die", "Der", "Das", "Ich", "Wir", "Betr", "Betreff",
 }
 _RELATIVES = (
     r"Sohn|Tochter|Ehefrau|Ehemann|Ehegatte|Ehegattin|Mann|Partner(?:in)?|Lebensgefährt(?:e|in)|Mutter|Vater|Bruder|"
-    r"Schwester|Enkel(?:in)?|Onkel|Tante|Neffe|Nichte|Betreuer(?:in)?|Dolmetscher(?:in)?|Familie"
+    r"Schwester|Enkel(?:in)?|Onkel|Tante|Neffe|Nichte|Betreuer(?:in)?|Dolmetscher(?:in)?|Familie|"
+    r"[Ss]on|[Dd]aughter|[Ww]ife|[Hh]usband|[Pp]artner|[Mm]other|[Ff]ather|[Bb]rother|[Ss]ister|[Gg]randson|"
+    r"[Gg]randdaughter|[Nn]ephew|[Nn]iece|[Uu]ncle|[Aa]unt|[Gg]uardian|[Cc]aregiver|[Ii]nterpreter|[Ff]amily"
 )
-_COLLEAGUES = r"Kollegin|Kollege|Oberarzt|Oberärztin|Chefarzt|Chefärztin|Assistenzarzt|Assistenzärztin|Hausarzt|Hausärztin"
+_COLLEAGUES = (
+    r"Kollegin|Kollege|Oberarzt|Oberärztin|Chefarzt|Chefärztin|Assistenzarzt|Assistenzärztin|Hausarzt|Hausärztin|"
+    r"[Cc]onsultant|[Aa]ttending|[Ss]urgeon|[Rr]egistrar|[Nn]urse|GP"
+)
 _FIRM = r"GmbH|mbH|AG|KG|OHG|UG|e\.\s?V\.|Gbr|GbR"
 _INSTITUTION = r"Klinikum|Universitätsklinikum|Uniklinikum|Krankenhaus|Klinik\s+am|Klinik|Praxis|Pflegeheim|Seniorenheim|Hospital"
 _INITIALS = rf"(?:[{_UP}]\.\s*)*"
@@ -86,12 +94,13 @@ RULES: list[Rule] = [
     Rule(
         "phone_labelled",
         "PHONE",
-        _r(r"(?:Tel\.?|Telefon|Phone|Mobil|Mobile|Handy|Fax)\s*[:.]?\s*([+\d(][\d\s()/.-]{5,}\d)"),
+        _r(r"(?:Tel\.?|Telefon|Phone|Telephone|Mobil|Mobile|Cell|Handy|Fax)\s*[:.]?\s*([+\d(][\d\s()/.-]{5,}\d)"),
         group=1,
     ),
     # --- banking / insurance / national IDs --------------------------------
     Rule("iban", "IBAN", _r(r"\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){2,7}(?:\s?[A-Z0-9]{1,4})?\b")),
     Rule("kvnr_de", "ID", _r(r"\b[A-Z]\d{9}\b")),  # German health insurance number
+    Rule("nhs_uk", "ID", _r(r"(?:NHS(?:\s+(?:No\.?|Number))?\s*[:#]?\s*)(\d{3}[ -]?\d{3}[ -]?\d{4})\b"), group=1),
     Rule("case_number", "ID", _r(r"\b[A-Z]{1,4}-\d{4}-\d{3,}\b")),  # F-2024-00871
     Rule("svnr_de", "ID", _r(r"\b\d{2}\s?\d{6}\s?[A-Z]\s?\d{3}\b")),  # German social security no.
     Rule("ssn_us", "ID", _r(r"\b\d{3}-\d{2}-\d{4}\b")),
@@ -102,7 +111,8 @@ RULES: list[Rule] = [
             r"(?:Fallnummer|Fall-?Nr\.?|Patienten-?(?:ID|Nr\.?|nummer)|Pat\.?-?(?:ID|Nr\.?)|MRN|"
             r"Patient\s+ID|Case\s+(?:No\.?|ID|number)|Aktenzeichen|Az\.|Versichertennummer|"
             r"Versicherten-?Nr\.?|Record\s+(?:No\.?|number)|Probanden-?(?:ID|Nr\.?)|"
-            r"Personalausweis(?:-?Nr\.?|nummer)?|Ausweis(?:-?Nr\.?|nummer)?|Reisepass(?:-?Nr\.?|nummer)?)"
+            r"Personalausweis(?:-?Nr\.?|nummer)?|Ausweis(?:-?Nr\.?|nummer)?|Reisepass(?:-?Nr\.?|nummer)?|"
+            r"Hospital\s+(?:No\.?|Number|ID)|Patient\s+(?:No\.?|Number)|Passport(?:\s+(?:No\.?|Number))?|SSN|MRN\.?)"
             r"\s*[:#.]?\s*((?=[A-Za-z0-9/-]*\d)[A-Za-z0-9][A-Za-z0-9/-]{2,})"
         ),
         group=1,
@@ -149,6 +159,12 @@ RULES: list[Rule] = [
         "ADDRESS",
         _r(rf"(?<![\w-])[{_UP}][{_LOW}-]*(?:straße|strasse)\b|\b[{_UP}][{_LOW}]+[\s-](?:Straße|Strasse)\b"),
     ),
+    Rule(
+        "us_city_state_zip",
+        "ADDRESS",
+        _r(rf"(?:{NAME_WORD}\s+){{0,2}}{NAME_WORD},\s+[A-Z]{{2}}\s+\d{{5}}(?:-\d{{4}})?\b"),
+    ),
+    Rule("uk_postcode", "LOCATION", _r(r"\b[A-Z]{1,2}\d[A-Z\d]?\s+\d[A-Z]{2}\b")),
     Rule("postcode_labelled", "LOCATION", _r(rf"(?:PLZ|D-)\s*:?\s*(\d{{5}}(?:\s+{NAME_WORD})?)"), group=1),
     # --- names with a clear hint -------------------------------------------
     Rule(
@@ -172,7 +188,7 @@ RULES: list[Rule] = [
     Rule(
         "name_before_birth_date",
         "PERSON",
-        _r(rf"({NAME_WORD},\s+{NAME_WORD}|{NAME_SEQ})(?=,?\s*\(?\s*(?:\*|geb\.|geboren|born\b))"),
+        _r(rf"({NAME_WORD},\s+{NAME_WORD}|{NAME_SEQ})(?=,?\s*\(?\s*(?:\*|geb\.|geboren|born\b|DOB\b|D\.O\.B|d\.o\.b))"),
         group=1,
     ),
     # --- places and organisations with a clear shape -------------------------
@@ -185,7 +201,7 @@ RULES: list[Rule] = [
     Rule("company", "ORG", _r(rf"((?:{NAME_WORD}\s+){{1,3}}(?:{_FIRM}))(?!\w)")),
     Rule("institution", "ORG", _r(rf"((?:{_INSTITUTION})\s+{NAME_WORD}(?:\s+{NAME_WORD})?)"), group=1),
     Rule("name_after_colleague", "PERSON", _r(rf"\b(?:{_COLLEAGUES})\s+({NAME_SEQ})"), group=1),
-    Rule("name_in_greeting", "PERSON", _r(rf"\b(?:Liebe[rs]?|Hallo)\s+({NAME_SEQ})"), group=1),
+    Rule("name_in_greeting", "PERSON", _r(rf"\b(?:Liebe[rs]?|Hallo|Dear|Hello|Hi)\s+({NAME_SEQ})"), group=1),
     Rule("name_before_email", "PERSON", _r(rf"({NAME_SEQ})\s*<[\w.+-]+@"), group=1),
     Rule(
         "name_labelled",
@@ -214,7 +230,7 @@ class PatternDetector:
                 value = text[start:end].strip()
                 if not value:
                     continue
-                if rule.name == "date_numeric" and not (1 <= int(m.group(1)) <= 31 and 1 <= int(m.group(2)) <= 12):
+                if rule.name == "date_numeric" and not _day_and_month(int(m.group(1)), int(m.group(2))):
                     continue  # a dose like 10-0-10 is not a date
                 if rule.entity_type == "PERSON":
                     value = _cut_at_line_end(text, start, value)
@@ -223,6 +239,11 @@ class PatternDetector:
                         continue
                 spans.append(Span(start, start + len(value), rule.entity_type, value, "pattern"))
         return spans
+
+
+def _day_and_month(first: int, second: int) -> bool:
+    """12.05.1975 and, in English, 03/14/1955: one number is a month, the other can be a day."""
+    return 1 <= first <= 31 and 1 <= second <= 31 and (first <= 12 or second <= 12)
 
 
 def _cut_at_line_end(text: str, start: int, value: str) -> str:

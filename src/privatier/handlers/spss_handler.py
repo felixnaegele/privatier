@@ -21,6 +21,7 @@ class SpssHandler(SameNameMixin):
         missing_ranges = dict(meta.missing_ranges or {})
         formats = dict(meta.original_variable_types or {})
 
+        t.begin_table("")
         names = list(df.columns)
         # A numeric column with value labels holds codes (1 = "Dr. Weiß"). The codes are data and
         # stay as they are; the labels hold the words and are checked below.
