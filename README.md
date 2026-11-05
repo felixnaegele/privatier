@@ -124,3 +124,13 @@ src/privatier/
   cli.py        command line
 tests/          run with: pytest
 ```
+
+## Licence
+
+Privatier is free and open source under the [Apache License 2.0](LICENSE): anyone may use, study, change and
+share it, including at work. It comes **without any warranty**. Privatier helps you remove identifying
+information, but it does not by itself make a use of data compliant with GDPR, HIPAA or your institution's
+rules. You remain responsible for checking the anonymised output and for following those rules.
+
+The optional local AI model is downloaded separately and has its own licence; check it on its model page
+before relying on it.
