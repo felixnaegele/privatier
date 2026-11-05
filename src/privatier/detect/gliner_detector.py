@@ -13,7 +13,9 @@ Install with:  pip install "privatier[ai]"
 
 from __future__ import annotations
 
+import logging
 import os
+import warnings
 
 from .base import Span
 
@@ -40,6 +42,19 @@ _CHUNK_CHARS = 1200
 _OVERLAP = 150
 
 
+class AIModelError(RuntimeError):
+    pass
+
+
+def _quiet() -> None:
+    """Hide technical warnings from the AI libraries that would only confuse users."""
+    os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+    warnings.filterwarnings("ignore", category=FutureWarning)
+    warnings.filterwarnings("ignore", category=UserWarning)
+    logging.getLogger("torch.distributed.elastic").setLevel(logging.ERROR)
+
+
 def is_available() -> bool:
     try:
         import gliner  # noqa: F401
@@ -50,9 +65,13 @@ def is_available() -> bool:
 
 def download_model(model_name: str = DEFAULT_MODEL) -> str:
     """Download the model once (the only step that uses the internet)."""
+    _quiet()
     from gliner import GLiNER
 
-    GLiNER.from_pretrained(model_name)
+    try:
+        GLiNER.from_pretrained(model_name)
+    except Exception as exc:
+        raise AIModelError(f"The AI model could not be set up: {exc}") from exc
     return model_name
 
 
@@ -61,9 +80,16 @@ class GlinerDetector:
 
     def __init__(self, model_name: str = DEFAULT_MODEL, threshold: float = 0.5):
         os.environ["HF_HUB_OFFLINE"] = "1"  # never reach out to the internet
+        _quiet()
         from gliner import GLiNER
 
-        self.model = GLiNER.from_pretrained(model_name, local_files_only=True)
+        try:
+            self.model = GLiNER.from_pretrained(model_name, local_files_only=True)
+        except Exception as exc:
+            raise AIModelError(
+                f"The local AI model could not be loaded ({exc}). Run 'privatier setup-ai' first; "
+                "if that does not help, reinstall with: pip install -e \".[ai]\""
+            ) from exc
         try:
             import torch
 

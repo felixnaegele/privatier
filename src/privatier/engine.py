@@ -135,13 +135,14 @@ def anonymize_folder(
     if work_dir.is_relative_to(output_dir):
         raise ValueError("The key folder must not be inside the anonymised folder.")
 
-    work_dir.mkdir(parents=True, exist_ok=True)
     key_path = work_dir / KEY_FILE
     # Re-using an existing key keeps tokens stable when a project is anonymised again.
     pseudo = Pseudonymizer.from_dict(load_vault(key_path, password)) if key_path.exists() else Pseudonymizer()
 
     if detectors is None:
-        detectors = build_detectors(use_ai)
+        with offline():  # the AI model must load from disk only
+            detectors = build_detectors(use_ai)
+    work_dir.mkdir(parents=True, exist_ok=True)  # only once everything is ready
     anon = Anonymizer(pseudo, detectors)
     audit = AuditLog(work_dir / AUDIT_FILE)
     summary = Summary(output_dir)

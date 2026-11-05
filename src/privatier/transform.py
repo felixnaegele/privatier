@@ -11,6 +11,7 @@ import re
 from collections import Counter
 
 from .detect.base import Detector, resolve_overlaps
+from .detect.stopwords import is_stopword
 from .pseudonyms import TOKEN_RE, KnownValueDetector, Pseudonymizer
 from .tables import CATEGORY_TO_TYPE, classify_header, looks_like_date_column
 
@@ -26,6 +27,10 @@ class Transformer:
 
     def text(self, value: str) -> str:
         raise NotImplementedError
+
+    def header(self, value: str) -> str:
+        """Column names and variable/value labels."""
+        return self.text(value)
 
     def classify(self, header: str | None, label: str | None = None) -> str | None:
         return None
@@ -49,13 +54,20 @@ class Anonymizer(Transformer):
     def detector_names(self) -> list[str]:
         return [d.name for d in self.detectors]
 
-    def text(self, value: str) -> str:
+    def header(self, value: str) -> str:
+        # Headers and labels are short and context-free: the AI guesses badly there
+        # ("Geschlecht" as a person), so only rules and known values apply.
+        return self.text(value, use_ai=False)
+
+    def text(self, value: str, use_ai: bool = True) -> str:
         if not value or not any(c.isalnum() for c in value):
             return value
         spans = []
         for detector in self.detectors:
+            if detector.name in _AI_SOURCES and not use_ai:
+                continue
             spans.extend(detector.detect(value))
-        spans = [s for s in spans if not TOKEN_RE.fullmatch(s.text)]  # don't re-anonymise tokens
+        spans = [s for s in spans if not TOKEN_RE.fullmatch(s.text) and not _ai_false_alarm(s)]
         out, last = [], 0
         for span in resolve_overlaps(spans):
             token = self.pseudo.token_for(span.entity_type, span.text)
@@ -94,6 +106,16 @@ class Anonymizer(Transformer):
             self.tokens.add(token)
             return token
         return super().cell(category, value)
+
+
+_AI_SOURCES = {"ner", "llm"}
+
+
+def _ai_false_alarm(span) -> bool:
+    """AI findings that are common research words or have no capital letter are ignored."""
+    if span.source not in _AI_SOURCES:
+        return False
+    return is_stopword(span.text) or not any(c.isupper() for c in span.text)
 
 
 def _year_of(value, anon: Anonymizer):

@@ -35,6 +35,15 @@ def _password(confirm: bool) -> str:
         return pw
 
 
+def _refuse_existing(folder: Path) -> None:
+    folder = Path(folder).resolve()
+    if folder.exists():
+        raise FileExistsError(
+            f"Output folder already exists: {folder}\n"
+            "Privatier never overwrites results. Delete or rename that folder, or choose another with --output."
+        )
+
+
 def _print_summary(title: str, s) -> None:
     print(f"\n{title}")
     print(f"  Output folder: {s.output_dir}")
@@ -81,7 +90,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "anonymize":
-            _, default_work = default_paths(args.folder)
+            default_out, default_work = default_paths(args.folder)
+            _refuse_existing(args.output or default_out)
             key_exists = ((args.key_dir or default_work) / KEY_FILE).exists()
             summary = anonymize_folder(
                 args.folder,
@@ -94,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
             work = (args.key_dir or default_work).resolve()
             print(f"\n  Key file and audit log (keep private, never upload): {work}")
         elif args.command == "restore":
+            _refuse_existing(args.output or args.folder.resolve().with_name(args.folder.resolve().name + "_restored"))
             summary = restore_folder(args.folder, args.key, _password(confirm=False), output_dir=args.output)
             _print_summary("Restore finished.", summary)
         elif args.command == "show-key":
@@ -106,13 +117,16 @@ def main(argv: list[str] | None = None) -> int:
             if not is_available():
                 print('The AI add-on is not installed. Run:  pip install "privatier[ai]"')
                 return 1
-            print(f"Downloading {DEFAULT_MODEL} (one time only)...")
+            print(f"Downloading {DEFAULT_MODEL} (one time only, about 1.2 GB)...")
             download_model()
-            print("Done. Use  privatier anonymize <folder> --ai")
+            from .detect.gliner_detector import GlinerDetector
+
+            GlinerDetector().detect("Test: Frau Anna Schmidt aus Hamburg.")  # check it really runs offline
+            print("Done, the local AI works. Use:  privatier anonymize <folder> --ai")
     except WrongPasswordError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 2
-    except (FileNotFoundError, FileExistsError, ValueError) as exc:
+    except (FileNotFoundError, FileExistsError, ValueError, RuntimeError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1
     return 0
