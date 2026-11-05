@@ -162,3 +162,47 @@ def test_failed_ai_model_leaves_nothing_behind(tmp_path, monkeypatch):
         anonymize_folder(src, PASSWORD, use_ai=True)
     assert not (tmp_path / "Studie_anonymized").exists()
     assert not (tmp_path / "Studie_privatier").exists()
+
+
+class FakeAI:
+    """Imitates what the real local AI did on the Mac test: right on names, wrong on common words."""
+
+    name = "ner"
+    GUESSES = {"Thomas": "PERSON", "Hamburg": "LOCATION", "Intervention": "ORG",
+               "Patienten": "PERSON", "Geschlecht": "PERSON", "Patient": "PERSON", "m": "PERSON"}
+
+    def detect(self, text):
+        import re
+
+        from privatier.detect.base import Span
+
+        spans = []
+        for word, etype in self.GUESSES.items():
+            for m in re.finditer(rf"(?<![^\W_]){re.escape(word)}(?![^\W_])", text):
+                spans.append(Span(m.start(), m.end(), etype, word, "ner", 0.9))
+        return spans
+
+
+def test_ai_false_alarms_do_not_damage_data(tmp_path):
+    from privatier.detect import PatternDetector
+
+    src = make(tmp_path / "Studie")
+    (src / "notiz.txt").write_text(
+        "Schmidt kam heute zur Kontrolle, begleitet von ihrem Mann Thomas aus Hamburg.", encoding="utf-8"
+    )
+    anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), FakeAI()])
+    out = tmp_path / "Studie_anonymized"
+
+    note = (out / "notiz.txt").read_text(encoding="utf-8")
+    assert "Thomas" not in note and "Hamburg" not in note and "Schmidt" not in note
+
+    csv = (out / "daten" / "studie_rohdaten.csv").read_bytes().decode("cp1252")
+    header, *rows = csv.splitlines()
+    assert header.startswith("Patienten-ID;Vorname;Nachname;Geburtsdatum;Geschlecht;Gruppe")
+    assert ";m;Intervention;" in rows[0]
+
+    pdf = (out / "discharge_summary.pdf.md").read_text(encoding="utf-8")
+    assert "Patient: PERSON_" in pdf
+
+    df, meta = pyreadstat.read_sav(str(out / "daten" / "fragebogen.sav"))
+    assert meta.variable_value_labels["gruppe"][1.0] == "Intervention"

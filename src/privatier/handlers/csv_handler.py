@@ -32,7 +32,7 @@ class CsvHandler(SameNameMixin):
             return
         header = rows[0]
         categories = [t.classify(h) for h in header]
-        out_rows = [[t.text(h) for h in header]]
+        out_rows = [[t.header(h) for h in header]]
         for row in rows[1:]:
             out_rows.append(
                 [t.cell(categories[i] if i < len(categories) else None, v) for i, v in enumerate(row)]

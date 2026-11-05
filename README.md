@@ -48,7 +48,10 @@ Detection works in layers:
    names after a title or label ("Frau Dr. Schmidt", "Mr. Smith", "Name: Müller, Max").
 3. **Local AI (optional, recommended on Apple Silicon M1 or newer):** the
    [GLiNER](https://github.com/urchade/GLiNER) model finds names, organisations and places in free text. It is
-   small (a few hundred MB) and runs on your laptop.
+   small (about 1.2 GB) and runs on your laptop.
+   To protect your data's usefulness, the AI is not used on column headers and labels, and it never replaces
+   common research words such as "Patient", "Intervention" or "Kontrolle" (editable list in
+   `src/privatier/detect/stopwords.py`).
 4. **Known values everywhere:** anything found in step 1–3 is also replaced wherever else it appears in the
    project, e.g. a name from an Excel column that turns up in a Word letter, or in a file name.
 

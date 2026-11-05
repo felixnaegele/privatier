@@ -46,6 +46,8 @@ class ExcelHandler(SameNameMixin):
                         continue  # empty or a formula
                     if header_row and cell.row > header_row:
                         new = t.cell(categories.get(cell.column), value)
+                    elif header_row and cell.row == header_row:
+                        new = t.header(value) if isinstance(value, str) else value
                     else:
                         new = t.text(value) if isinstance(value, str) else value
                     if new != value:

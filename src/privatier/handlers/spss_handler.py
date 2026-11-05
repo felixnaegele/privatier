@@ -29,9 +29,9 @@ class SpssHandler(SameNameMixin):
                     changed = changed.map(lambda v: "" if v is None or (isinstance(v, float) and pd.isna(v)) else str(v))
             df[col] = changed
 
-        new_labels = [t.text(labels[c]) if labels.get(c) else None for c in df.columns]
+        new_labels = [t.header(labels[c]) if labels.get(c) else None for c in df.columns]
         for col, mapping in value_labels.items():
-            value_labels[col] = {k: t.text(v) if isinstance(v, str) else v for k, v in mapping.items()}
+            value_labels[col] = {k: t.header(v) if isinstance(v, str) else v for k, v in mapping.items()}
 
         if dst is not None:
             measures = {c: m for c, m in (meta.variable_measure or {}).items() if c in df.columns}
