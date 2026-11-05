@@ -12,8 +12,9 @@ from collections import Counter
 from typing import NamedTuple
 
 from .detect.base import Detector, Span, resolve_overlaps
-from .detect.stopwords import is_stopword
-from .identity import Person, Record, Registry, name_key, parse_birth_date
+from .detect.patterns import _NOT_NAMES, NAME_WORD
+from .detect.stopwords import is_ordinary_use, is_stopword
+from .identity import Person, Record, Registry, name_key, name_parts, parse_birth_date, surname_first
 from .pseudonyms import TOKEN_RE, KnownValueDetector, Pseudonymizer
 from .tables import (
     CATEGORY_TO_TYPE,
@@ -37,6 +38,12 @@ _ACADEMIC = re.compile(r"(?:Dr\.|Prof\.|PD)\s*(?:med\.\s*)?$")
 _BIRTH_MARK = re.compile(
     r"(?:geb\.?|geboren(?:\s+am)?|born(?:\s+on)?|DOB|Geburtsdatum|Date\s+of\s+birth|\*)\s*:?\s*$", re.IGNORECASE
 )
+_RELATIVE_BEFORE = re.compile(
+    r"(?:Sohn|Tochter|Ehefrau|Ehemann|Ehegatte|Ehegattin|Mann|Partner(?:in)?|Lebensgefährt(?:e|in)|Mutter|Vater|Bruder|"
+    r"Schwester|Enkel(?:in)?|Onkel|Tante|Neffe|Nichte|Betreuer(?:in)?|Dolmetscher(?:in)?)[,:]?\s+$"
+)
+_WORD_BEFORE = re.compile(rf"(?:^|(?<=[^\w.!?:;\n]))\s*({NAME_WORD})[ ]$")
+_BIRTH_YEAR_AFTER = re.compile(r"[\s,(]*(?:Jg\.?|Jahrgang|geb\.?|geboren|\*)\s*((?:19|20)\d{2})(?!\d|\.)")
 _ONLY_SEPARATORS = re.compile(r"^[\s,;(]*$")
 _NEAR = 80
 
@@ -66,6 +73,13 @@ class Transformer:
         """Column names and variable/value labels."""
         return self.text(value)
 
+    def file_name(self, value: str) -> str:
+        return self.text(value)
+
+    def labelled(self, category: str, value: str):
+        """A value whose label ("Fallnummer" in a Word table) says it is sensitive."""
+        return self.text(value)
+
     def classify(self, header: str | None, label: str | None = None) -> str | None:
         return None
 
@@ -83,6 +97,15 @@ class Transformer:
     def row(self, columns: list[Column], values: list) -> list:
         """One table row. Handled as a whole, because the cells of a row belong to one person."""
         return [self.cell(_column_at(columns, i).category, v) for i, v in enumerate(values)]
+
+
+def _with_name_roles(columns: list[Column]) -> list[Column]:
+    """A column called just "Name" next to "Vorname" holds the surname, and the other way round."""
+    roles = {c.role for c in columns if c.category == "PERSON"}
+    if "full" not in roles or ("first" in roles) == ("last" in roles):
+        return columns
+    other = "last" if "first" in roles else "first"
+    return [c._replace(role=other) if c.category == "PERSON" and c.role == "full" else c for c in columns]
 
 
 def _column_at(columns: list[Column], i: int) -> Column:
@@ -110,12 +133,35 @@ class Anonymizer(Transformer):
         self.registry = Registry(pseudonymizer)
         self.collecting = True  # first pass: only gather evidence about who is who
         self.current_file = ""
+        self._chunks: list[tuple[str, str, list[Span]]] = []
+        self._row_person: Person | None = None
 
     def finish_collecting(self) -> None:
         """After the first pass: decide who is who, then also replace every value seen anywhere."""
-        self.registry.resolve()
+        self.registry.resolve_records()
+        self._find_known_people_in_text()
+        self.registry.resolve_mentions()
+        self._chunks = []
         self.collecting = False
         self.detectors = self.base_detectors + [KnownValueDetector(self.pseudo)]
+
+    def _find_known_people_in_text(self) -> None:
+        """A letter about Hannah Berger may only name her in a way that needs the tables to be recognised.
+
+        Without this her mother, named by a rule, would look like the only Berger in the letter.
+        """
+        known = KnownValueDetector(self.pseudo)
+        for file, value, spans in self._chunks:
+            for span in known.detect(value):
+                if span.entity_type != "PERSON" or len(name_parts(span.text)) < 2:
+                    continue
+                if any(s.start < span.end and span.start < s.end and s.entity_type == "PERSON" for s in spans):
+                    continue
+                gender, academic = _title_before(value, span)
+                birth = _birth_date_next_to(value, span, [*spans, span])
+                self.registry.observe_mention(
+                    file, span.text, gender, academic, birth, relative=_is_relative(value, span)
+                )
 
     @property
     def detector_names(self) -> list[str]:
@@ -126,21 +172,38 @@ class Anonymizer(Transformer):
         # ("Geschlecht" as a person), so only rules and known values apply.
         return self.text(value, use_ai=False)
 
-    def text(self, value: str, use_ai: bool = True) -> str:
+    def file_name(self, value: str) -> str:
+        # "Verlauf_Berger" reads as two words to a person, so it has to for the detectors too.
+        # In the first pass only rules count: the AI guesses badly here, and a guess must not spread.
+        return self.text(value, use_ai=not self.collecting, read_as=value.replace("_", " "))
+
+    def text(self, value: str, use_ai: bool = True, read_as: str | None = None) -> str:
         if not value or not any(c.isalnum() for c in value):
             return value
         spans = []
         for detector in self.detectors:
             if detector.name in _AI_SOURCES and not use_ai:
                 continue
-            spans.extend(detector.detect(value))
-        spans = [s for s in spans if not TOKEN_RE.fullmatch(s.text) and not _ai_false_alarm(s)]
+            spans.extend(detector.detect(read_as if read_as is not None else value))
+        spans = [_only_the_name(read_as if read_as is not None else value, s) for s in spans]
+        spans = [
+            s
+            for s in spans
+            if not TOKEN_RE.fullmatch(s.text) and not _ai_false_alarm(s) and not _ordinary_word(value, s)
+        ]
+        if not self.collecting:
+            spans = [_with_given_name(value, s) for s in spans]
         chosen = resolve_overlaps(spans)
         if self.collecting:
             self._collect_from_text(value, chosen)
+            self._chunks.append((self.current_file, value, chosen))
         out, last = [], 0
         for span in chosen:
             token = self._token_for_span(value, span, chosen)
+            written = value[span.start : span.end]
+            if written != span.text and not self.collecting:  # "Schulz_Peter", read as "Schulz Peter"
+                m = TOKEN_RE.match(token)
+                token = self.pseudo.form_of(f"{m.group(1)}_{m.group(2)}", written)
             out.append(value[last : span.start])
             out.append(token)
             last = span.end
@@ -152,12 +215,17 @@ class Anonymizer(Transformer):
     # -- free text ---------------------------------------------------------------
     def _token_for_span(self, value: str, span: Span, spans: list[Span]) -> str:
         if span.entity_type != "PERSON":
+            one_word = " " not in span.text.strip()
+            if self.collecting and span.source in _AI_SOURCES and one_word and span.entity_type != "LOCATION":
+                return span.text  # a single AI guess must not spread to every other file
             return self.pseudo.token_for(span.entity_type, span.text)
         if self.collecting:
             return span.text  # who this is gets decided once all files were read
         gender, academic = _title_before(value, span)
         birth = _birth_date_next_to(value, span, spans)
-        person, note = self.registry.person_for_mention(span.text, self.current_file, gender, academic, birth)
+        person, note = self.registry.person_for_mention(
+            span.text, self.current_file, gender, academic, birth, self._row_person
+        )
         if note and note not in self.warnings:
             self.warnings.append(note)
         if person is None:
@@ -176,7 +244,10 @@ class Anonymizer(Transformer):
             elif span.entity_type == "PERSON":
                 gender, academic = _title_before(value, span)
                 birth = _birth_date_next_to(value, span, spans)
-                self.registry.observe_mention(self.current_file, span.text, gender, academic, birth)
+                self.registry.observe_mention(
+                    self.current_file, span.text, gender, academic, birth, span.source in _AI_SOURCES,
+                    _is_relative(value, span),
+                )
 
     # -- tables ------------------------------------------------------------------
     def classify(self, header: str | None, label: str | None = None) -> str | None:
@@ -205,18 +276,24 @@ class Anonymizer(Transformer):
                     last = text
                 else:
                     full = text
-            elif column.category == "DOB":
-                birth = parse_birth_date(value)
+            elif column.category in ("DOB", "BIRTH_YEAR"):
+                birth = birth or parse_birth_date(value)
             elif column.category == "ID" and not column.visit_id:
                 ids.add((column.key, text))
             elif column.role == "gender":
                 gender = _GENDER_WORDS.get(text.casefold())
+        if full and not (first or last) and (split := surname_first(full)):
+            first, last = split
         canonical = full or " ".join(p for p in (first, last) if p)
         if not canonical:
             return None
-        return Record(name_key(canonical), " ".join(canonical.split()), first, last, birth, frozenset(ids), gender)
+        spellings = {s for s in (canonical, first, last) if s}
+        return Record(
+            name_key(canonical), " ".join(canonical.split()), first, last, birth, frozenset(ids), gender, set(), spellings
+        )
 
     def row(self, columns: list[Column], values: list) -> list:
+        columns = _with_name_roles(columns)
         record = self._record_of_row(columns, values)
         person: Person | None = None
         if record is not None:
@@ -225,13 +302,32 @@ class Anonymizer(Transformer):
             else:
                 person = self.registry.person_for_record(record)
         out = []
+        self._row_person = person
         for i, value in enumerate(values):
             column = _column_at(columns, i)
             if column.category == "PERSON" and column.role in _NAME_ROLES and not _blank(value):
                 out.append(self._person_cell(column, value, person))
             else:
                 out.append(self.cell(column.category, value))
+        self._row_person = None
         return out
+
+    def labelled(self, category: str, value: str):
+        new = self.text(value)
+        if new != value or not value.strip():
+            return new
+        if category == "PERSON":  # same path as any other name, so that it links to the same person
+            span = Span(0, len(value), "PERSON", value.strip(), "pattern")
+            if self.collecting:
+                self.registry.observe_mention(self.current_file, span.text, None, False, None)
+                return value
+            return self._token_for_span(value, span, [span])
+        evidence = self.registry.file(self.current_file)
+        if self.collecting and category == "DOB" and (birth := parse_birth_date(value)):
+            evidence.birth_dates.append(birth)
+        if self.collecting and category == "ID":
+            evidence.ids.add(value.strip())
+        return str(self.cell(category, value))
 
     def _person_cell(self, column: Column, value, person: Person | None):
         text = _cell_text(value).strip()
@@ -275,8 +371,25 @@ def _title_before(value: str, span: Span) -> tuple[str | None, bool]:
     return _GENDER_WORDS.get(word.strip(".").casefold()), academic
 
 
+def _is_relative(value: str, span: Span) -> bool:
+    return bool(_RELATIVE_BEFORE.search(value[max(0, span.start - 25) : span.start]))
+
+
+def _with_given_name(value: str, span: Span) -> Span:
+    """"Ben Berger" when only Berger is known: the word in front of a known surname goes with it."""
+    if span.source != "known" or span.entity_type != "PERSON" or " " in span.text.strip():
+        return span
+    m = _WORD_BEFORE.search(value[max(0, span.start - 30) : span.start])
+    if m is None or m.group(1) in _NOT_NAMES or is_stopword(m.group(1)):
+        return span
+    start = span.start - len(m.group(0).lstrip())
+    return Span(start, span.end, span.entity_type, value[start : span.end], span.source, span.score)
+
+
 def _birth_date_next_to(value: str, span: Span, spans: list[Span]):
     """"Max Müller, geb. 12.05.1975": the birth date that belongs to this mention of a name."""
+    if m := _BIRTH_YEAR_AFTER.match(value[span.end : span.end + 25]):
+        return parse_birth_date(m.group(1))
     for other in spans:
         if other.entity_type != "DATE" or other.start < span.end or other.start - span.end > _NEAR:
             continue
@@ -296,7 +409,34 @@ def _ai_false_alarm(span) -> bool:
     """AI findings that are common research words or have no capital letter are ignored."""
     if span.source not in _AI_SOURCES:
         return False
-    return is_stopword(span.text) or not any(c.isupper() for c in span.text)
+    text = span.text.strip()
+    if len(text) <= 2 or (text.isupper() and len(text) <= 4):
+        return True  # abbreviations, not names ("RS", "ICD")
+    return is_stopword(text) or not any(c.isupper() for c in text)
+
+
+def _only_the_name(value: str, span: Span) -> Span:
+    """The AI may return "Gutachten vdBerg" or two lines at once: keep only what can be the name."""
+    if span.source not in _AI_SOURCES or span.entity_type != "PERSON":
+        return span
+    start, end = span.start, span.end
+    if "\n" in value[start:end]:
+        end = start + value[start:end].index("\n")
+    words = list(re.finditer(r"\S+", value[start:end]))
+    while len(words) > 1 and is_stopword(words[0].group()):
+        words.pop(0)
+    while len(words) > 1 and is_stopword(words[-1].group()):
+        words.pop()
+    if not words:
+        return span
+    begin, finish = start + words[0].start(), start + words[-1].end()
+    return Span(begin, finish, span.entity_type, value[begin:finish], span.source, span.score)
+
+
+def _ordinary_word(value: str, span: Span) -> bool:
+    if span.entity_type != "PERSON" or " " in span.text.strip():
+        return False
+    return is_ordinary_use(span.text.strip(), value[max(0, span.start - 20) : span.start], value[span.end : span.end + 20])
 
 
 def _year_of(value, anon: Anonymizer):

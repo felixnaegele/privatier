@@ -25,6 +25,7 @@ import datetime as dt
 import re
 import unicodedata
 from dataclasses import dataclass, field
+from typing import NamedTuple
 
 from .pseudonyms import Pseudonymizer
 
@@ -35,6 +36,14 @@ _DATE_DOTS = re.compile(r"^(\d{1,2})\.\s?(\d{1,2})\.\s?(\d{4}|\d{2})$")
 _DATE_SLASH = re.compile(r"^(\d{1,2})[/-](\d{1,2})[/-](\d{4}|\d{2})$")
 _DATE_ISO = re.compile(r"^(\d{4})-(\d{2})-(\d{2})")
 _YEAR_ONLY = re.compile(r"^(19|20)\d{2}$")
+_MONTH_NUMBERS = {
+    "januar": 1, "jan": 1, "january": 1, "februar": 2, "feb": 2, "february": 2, "märz": 3, "maerz": 3, "mär": 3,
+    "mar": 3, "march": 3, "april": 4, "apr": 4, "mai": 5, "may": 5, "juni": 6, "jun": 6, "june": 6, "juli": 7,
+    "jul": 7, "july": 7, "august": 8, "aug": 8, "september": 9, "sep": 9, "sept": 9, "oktober": 10, "okt": 10,
+    "oct": 10, "october": 10, "november": 11, "nov": 11, "dezember": 12, "dez": 12, "dec": 12, "december": 12,
+}
+_DATE_WORDS_DMY = re.compile(r"^(\d{1,2})\.?\s+([^\W\d]+)\.?,?\s+(\d{4})$")
+_DATE_WORDS_MDY = re.compile(r"^([^\W\d]+)\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})$")
 
 
 # --------------------------------------------------------------------------- names
@@ -51,8 +60,16 @@ def name_parts(text: str) -> tuple[str, ...]:
 
 
 def name_key(text: str) -> tuple[str, ...]:
-    """"Müller, Max" and "Max Mueller" give the same key."""
-    return tuple(sorted(name_parts(text)))
+    """"Müller, Max" and "Max Mueller" give the same key, as do "Hans-Jürgen" and "Hans Jürgen"."""
+    return tuple(sorted(word for part in name_parts(text) for word in part.split("-") if word))
+
+
+def surname_first(text: str) -> tuple[str, str] | None:
+    """"Müller, Max" -> ("Max", "Müller")."""
+    if text.count(",") != 1:
+        return None
+    last, first = (part.strip() for part in text.split(","))
+    return (first, last) if first and last else None
 
 
 # --------------------------------------------------------------------------- birth dates
@@ -128,6 +145,12 @@ def parse_birth_date(value) -> BirthDate | None:
         for year in _centuries(m[3]):
             candidates.add(_iso(year, int(m[2]), int(m[1])))  # day first
             candidates.add(_iso(year, int(m[1]), int(m[2])))  # month first
+    elif m := _DATE_WORDS_DMY.match(raw):
+        if month := _MONTH_NUMBERS.get(m[2].casefold()):
+            candidates.add(_iso(int(m[3]), month, int(m[1])))
+    elif m := _DATE_WORDS_MDY.match(raw):
+        if month := _MONTH_NUMBERS.get(m[1].casefold()):
+            candidates.add(_iso(int(m[3]), month, int(m[2])))
     dates = frozenset(c for c in candidates if c)
     if not dates:
         return None
@@ -148,6 +171,7 @@ class Record:
     ids: frozenset[tuple[str, str]] = frozenset()  # (column, value): patient-level IDs only
     gender: str | None = None
     files: set[str] = field(default_factory=set)
+    spellings: set[str] = field(default_factory=set)
 
     @property
     def identity(self) -> tuple:
@@ -190,6 +214,11 @@ class Person:
     def shares_evidence_with(self, record: Record) -> bool:
         if record.birth and any(record.birth.dates & b.dates for b in self.births):
             return True
+        # "Jg. 1961" and 23.08.1961: only the year is known, and it fits.
+        if record.birth and any(
+            (not record.birth.dates or not b.dates) and record.birth.same_person_possible(b) for b in self.births
+        ):
+            return True
         return bool({v for _, v in record.ids} & {v for _, v in self.ids})
 
     def to_dict(self) -> dict:
@@ -220,11 +249,20 @@ class Person:
         )
 
 
+class Mention(NamedTuple):
+    text: str
+    gender: str | None
+    academic: bool
+    birth: BirthDate | None
+    from_ai: bool
+    relative: bool  # "seine Mutter Ingeborg Berger": someone other than the person the document is about
+
+
 @dataclass
 class FileEvidence:
     birth_dates: list[BirthDate] = field(default_factory=list)
     ids: set[str] = field(default_factory=set)
-    mentions: list[tuple[str, str | None, bool, BirthDate | None]] = field(default_factory=list)
+    mentions: list[Mention] = field(default_factory=list)
     people: set[str] = field(default_factory=set)  # tokens of people who appear in this file
 
 
@@ -254,42 +292,56 @@ class Registry:
         stored.gender = stored.gender or record.gender
         stored.first = stored.first or record.first
         stored.last = stored.last or record.last
+        stored.spellings |= {s for s in (record.canonical, record.first, record.last) if s}
 
     def observe_mention(
-        self, file: str, text: str, gender: str | None, academic: bool, birth: BirthDate | None
+        self,
+        file: str,
+        text: str,
+        gender: str | None,
+        academic: bool,
+        birth: BirthDate | None,
+        from_ai: bool = False,
+        relative: bool = False,
     ) -> None:
-        self.file(file).mentions.append((text, gender, academic, birth))
+        self.file(file).mentions.append(Mention(text, gender, academic, birth, from_ai, relative))
         if birth and len(name_parts(text)) >= 2:
             self.observe_record(Record(name_key(text), " ".join(text.split()), birth=birth, gender=gender), file)
 
     # -- deciding ------------------------------------------------------------
-    def resolve(self) -> None:
-        """Called once, after all files were read: turn the evidence into people."""
-        with_evidence = [r for r in self.records.values() if r.birth or r.ids]
-        without = [r for r in self.records.values() if not (r.birth or r.ids)]
-        # Most complete first, so that weaker records attach to well-identified people.
-        with_evidence.sort(key=lambda r: (not (r.birth and r.birth.dates), not r.ids))
-        for record in with_evidence + without:
-            self._place(record)
+    def resolve_records(self) -> None:
+        """Step 1, after all files were read: turn tables and birth dates into people."""
+        self._place_new_records()
 
+    def resolve_mentions(self) -> None:
+        """Step 2, once full names were also searched for in free text: who appears where."""
+        self._place_new_records()
         for name, evidence in self.files.items():
             for person in self.people:
                 if name in person.files:
                     evidence.people.add(person.token)
         # Names that only ever appear in free text, without a birth date.
         for name, evidence in self.files.items():
-            for text, _gender, academic, _birth in evidence.mentions:
-                key = name_key(text)
-                if len(key) >= 2 and not academic and key not in self._by_key:
-                    self._new_person(Record(key, " ".join(text.split()), files={name}))
+            for mention in evidence.mentions:
+                key = name_key(mention.text)
+                if self._surname_of_someone_here(mention.text, name) is not None:
+                    continue  # "Herr van den Berg" in a letter about Willem van den Berg
+                if len(name_parts(mention.text)) >= 2 and not mention.academic and key not in self._by_key:
+                    self._new_person(Record(key, " ".join(mention.text.split()), files={name}))
         for name, evidence in self.files.items():
-            for text, gender, academic, birth in evidence.mentions:
-                if len(name_parts(text)) >= 2:
-                    person = self._match_full_name(text, name, academic, birth)
+            for mention in evidence.mentions:
+                person = None
+                if len(name_parts(mention.text)) >= 2:
+                    person = self._match_full_name(mention.text, name, mention.academic, mention.birth)
                     if person is not None:
-                        evidence.people.add(person.token)
                         person.files.add(name)
-
+                        if not mention.relative:
+                            evidence.people.add(person.token)
+                if person is None and not mention.from_ai:
+                    # Found by a rule, so it is reliable: also look for it everywhere else.
+                    # A single AI guess is not, one wrong word would spread through the whole project.
+                    self.pseudo.token_for("PERSON", mention.text)
+        self._register_spellings()
         for key, people in self._by_key.items():
             if len(people) > 1:
                 codes = ", ".join(p.token for p in people)
@@ -304,6 +356,23 @@ class Registry:
                 "The ID keeps one code, as in the original: please check whether these IDs come from different lists."
             )
         self.pseudo.people = [p.to_dict() for p in self.people]
+
+    def _place_new_records(self) -> None:
+        new = [r for r in self.records.values() if r.identity not in self._record_owner]
+        with_evidence = [r for r in new if r.birth or r.ids]
+        without = [r for r in new if not (r.birth or r.ids)]
+        # Most complete first, so that weaker records attach to well-identified people.
+        with_evidence.sort(key=lambda r: (not (r.birth and r.birth.dates), not r.ids))
+        for record in with_evidence + without:
+            self._place(record)
+        self._register_spellings()
+
+    def _register_spellings(self) -> None:
+        for record in self.records.values():
+            owner = self._record_owner.get(record.identity)
+            if owner is not None:
+                for spelling in record.spellings:
+                    self.pseudo.form_of(owner.token, spelling, self.form_for(owner, spelling))
 
     def _new_person(self, record: Record) -> Person:
         person = Person(self.pseudo.new_person(record.canonical), record.key, record.canonical)
@@ -374,7 +443,8 @@ class Registry:
             exact = self._evidence_match(people, [birth], set())
             if exact is not None:
                 return exact
-            return None
+            undated = [p for p in people if not any(birth.same_person_possible(b) is False for b in p.births)]
+            return undated[0] if len(undated) == 1 else None
         evidence = self.file(file)
         exact = self._evidence_match(people, evidence.birth_dates, evidence.ids)
         if exact is not None:
@@ -384,7 +454,13 @@ class Registry:
         return None
 
     def person_for_mention(
-        self, text: str, file: str, gender: str | None, academic: bool, birth: BirthDate | None
+        self,
+        text: str,
+        file: str,
+        gender: str | None,
+        academic: bool,
+        birth: BirthDate | None,
+        row_person: Person | None = None,
     ) -> tuple[Person | None, str | None]:
         """Who a name in free text refers to, plus a review note if that is not certain."""
         parts = name_parts(text)
@@ -392,6 +468,8 @@ class Registry:
             return None, None
         if len(parts) >= 2:
             person = self._match_full_name(text, file, academic, birth)
+            if person is None and (part_of := self._surname_of_someone_here(text, file)) is not None:
+                return part_of, None
             if person is None:
                 count = len(self._by_key.get(name_key(text), []))
                 if count > 1:
@@ -405,7 +483,21 @@ class Registry:
             if person.has_evidence and file not in {f for f in person.files if self._confirmed(person, f)}:
                 return person, f"{person.token}: linked to a record in another file by name only, please check."
             return person, None
+        if row_person is not None and self._part_fits(parts[0], row_person):
+            return row_person, None  # a note in the row of the person it is about
         return self._match_single_name(parts[0], file, gender), None
+
+    def _surname_of_someone_here(self, text: str, file: str) -> Person | None:
+        """A surname of several words: all of them belong to exactly one longer name in this document."""
+        words = set(name_key(text))
+        if len(words) < 2:
+            return None
+        fitting = [
+            self._by_token[token]
+            for token in self.file(file).people
+            if words < set(self._by_token[token].key)
+        ]
+        return fitting[0] if len(fitting) == 1 else None
 
     def _confirmed(self, person: Person, file: str) -> bool:
         evidence = self.file(file)
@@ -419,9 +511,17 @@ class Registry:
         fitting = []
         for token in self.file(file).people:
             person = self._by_token[token]
-            if part in person.key and not (gender and person.gender and gender != person.gender):
+            if gender and person.gender and gender != person.gender:
+                continue
+            if self._part_fits(part, person):
                 fitting.append(person)
         return fitting[0] if len(fitting) == 1 else None
+
+    @staticmethod
+    def _part_fits(part: str, person: Person) -> bool:
+        words = part.split("-")
+        genitive = part[:-1].split("-") if part.endswith(("s", "'")) else []
+        return all(w in person.key for w in words) or bool(genitive and all(w in person.key for w in genitive))
 
     def form_for(self, person: Person, text: str) -> str:
         """F for a first name, L for a surname, V for any other spelling."""

@@ -86,9 +86,9 @@ def _list_files(root: Path) -> list[Path]:
 
 def _output_rel_path(rel: Path, out_name: str, t: Transformer) -> Path:
     """File and folder names can contain names too ("Arztbrief_Mueller.docx")."""
-    parts = [t.text(p) for p in rel.parent.parts]
+    parts = [t.file_name(p) for p in rel.parent.parts]
     stem, dot, ext = out_name.partition(".")
-    return Path(*parts, t.text(stem) + dot + ext)
+    return Path(*parts, t.file_name(stem) + dot + ext)
 
 
 def _unique(path: Path) -> Path:
@@ -162,9 +162,9 @@ def anonymize_folder(
             if handler is None:
                 continue
             anon.current_file = str(path.relative_to(input_dir))
-            anon.text(path.stem)
+            anon.file_name(path.stem)
             for part in path.relative_to(input_dir).parent.parts:
-                anon.text(part)
+                anon.file_name(part)
             try:
                 handler.process(path, None, anon)
             except Exception:

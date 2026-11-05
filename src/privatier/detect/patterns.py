@@ -17,10 +17,13 @@ from dataclasses import dataclass
 
 from .base import Span
 
-_UP = "A-ZÄÖÜ"
-_LOW = "a-zäöüßàáâçèéêëíîïñóôúûý"
+# All Latin letters, not only German ones: patients are also called Şahin, Çelik or Łukasiewicz.
+_LATIN = [chr(c) for c in range(0xC0, 0x250)]
+_UP = "A-Z" + "".join(c for c in _LATIN if c.isupper())
+_LOW = "a-z" + "".join(c for c in _LATIN if c.islower())
 NAME_WORD = rf"(?:[{_UP}]'(?=[{_UP}]))?[{_UP}][{_LOW}]+(?:[{_UP}][{_LOW}]+)?(?:-[{_UP}][{_LOW}]+)?"
-NAME_SEQ = rf"{NAME_WORD}(?:\s+{NAME_WORD}){{0,2}}"
+_PARTICLES = r"(?:von|van|de|del|der|den|zu|zur|ten|ter|dos|da)"
+NAME_SEQ = rf"(?:(?<!\w){_PARTICLES}\s+(?:{_PARTICLES}\s+)?)?{NAME_WORD}(?:\s+(?:{_PARTICLES}\s+(?:{_PARTICLES}\s+)?)?{NAME_WORD}){{0,2}}"
 
 _MONTHS = (
     "januar|january|jan|februar|february|feb|märz|maerz|march|mär|mar|april|apr|"
@@ -32,10 +35,26 @@ _MONTHS = (
 _NOT_NAMES = {
     "Name", "Namen", "Data", "Daten", "Nummer", "Number", "Record", "Akte",
     "Information", "Informationen", "Status", "Alter", "Age", "Gruppe", "Group",
+    # "Frau Schmidts Morbus Crohn", "Herr Müllers Ehefrau": where a name ends
+    "Morbus", "Syndrom", "Diagnose", "Diagnosen", "Befund", "Therapie", "Station", "Zimmer", "Klinik",
+    "Pat", "Patient", "Patientin", "Patienten", "Proband", "Probandin", "Kollege", "Kollegin", "Doktor",
+    "Ehefrau", "Ehemann", "Ehegatte", "Ehegattin", "Tochter", "Sohn", "Mutter", "Vater", "Bruder", "Schwester",
+    "Enkel", "Enkelin", "Familie", "Betreuer", "Betreuerin", "Partner", "Partnerin", "Angehörige", "Angehöriger",
+    "Rücksprache", "Rückruf", "Termin", "Kontrolle", "Nach", "Am", "Seit", "Bei", "Wegen",
+    "Lebensgefährte", "Lebensgefährtin", "Mann", "Onkel", "Tante", "Neffe", "Nichte", "Dolmetscher", "Dolmetscherin",
+    "Frau", "Herr", "Herrn", "Sie", "Er", "Die", "Der", "Das", "Ich", "Wir", "Betr", "Betreff",
 }
+_RELATIVES = (
+    r"Sohn|Tochter|Ehefrau|Ehemann|Ehegatte|Ehegattin|Mann|Partner(?:in)?|Lebensgefährt(?:e|in)|Mutter|Vater|Bruder|"
+    r"Schwester|Enkel(?:in)?|Onkel|Tante|Neffe|Nichte|Betreuer(?:in)?|Dolmetscher(?:in)?|Familie"
+)
+_COLLEAGUES = r"Kollegin|Kollege|Oberarzt|Oberärztin|Chefarzt|Chefärztin|Assistenzarzt|Assistenzärztin|Hausarzt|Hausärztin"
+_FIRM = r"GmbH|mbH|AG|KG|OHG|UG|e\.\s?V\.|Gbr|GbR"
+_INSTITUTION = r"Klinikum|Universitätsklinikum|Uniklinikum|Krankenhaus|Klinik\s+am|Klinik|Praxis|Pflegeheim|Seniorenheim|Hospital"
+_INITIALS = rf"(?:[{_UP}]\.\s*)*"
 
 
-_WRAPPED_LINE = 50  # characters; shorter lines ended on purpose
+_WRAPPED_LINE = 60  # characters; shorter lines ended on purpose
 
 
 @dataclass(frozen=True)
@@ -73,6 +92,7 @@ RULES: list[Rule] = [
     # --- banking / insurance / national IDs --------------------------------
     Rule("iban", "IBAN", _r(r"\b[A-Z]{2}\d{2}(?:\s?[A-Z0-9]{4}){2,7}(?:\s?[A-Z0-9]{1,4})?\b")),
     Rule("kvnr_de", "ID", _r(r"\b[A-Z]\d{9}\b")),  # German health insurance number
+    Rule("case_number", "ID", _r(r"\b[A-Z]{1,4}-\d{4}-\d{3,}\b")),  # F-2024-00871
     Rule("svnr_de", "ID", _r(r"\b\d{2}\s?\d{6}\s?[A-Z]\s?\d{3}\b")),  # German social security no.
     Rule("ssn_us", "ID", _r(r"\b\d{3}-\d{2}-\d{4}\b")),
     Rule(
@@ -81,13 +101,20 @@ RULES: list[Rule] = [
         _r(
             r"(?:Fallnummer|Fall-?Nr\.?|Patienten-?(?:ID|Nr\.?|nummer)|Pat\.?-?(?:ID|Nr\.?)|MRN|"
             r"Patient\s+ID|Case\s+(?:No\.?|ID|number)|Aktenzeichen|Az\.|Versichertennummer|"
-            r"Versicherten-?Nr\.?|Record\s+(?:No\.?|number)|Probanden-?(?:ID|Nr\.?))"
+            r"Versicherten-?Nr\.?|Record\s+(?:No\.?|number)|Probanden-?(?:ID|Nr\.?)|"
+            r"Personalausweis(?:-?Nr\.?|nummer)?|Ausweis(?:-?Nr\.?|nummer)?|Reisepass(?:-?Nr\.?|nummer)?)"
             r"\s*[:#.]?\s*((?=[A-Za-z0-9/-]*\d)[A-Za-z0-9][A-Za-z0-9/-]{2,})"
         ),
         group=1,
     ),
     # --- dates --------------------------------------------------------------
-    Rule("date_numeric", "DATE", _r(r"(?<![\d.])\d{1,2}[./-]\d{1,2}[./-](?:\d{4}|\d{2})(?![\d.]\d)")),
+    Rule("date_numeric", "DATE", _r(r"(?<![\d.])(\d{1,2})[./-](\d{1,2})[./-](?:\d{4}|\d{2})(?![\d.]\d)")),
+    # 12031948 or 19480312, e.g. in a folder name. A boundary may be "_".
+    Rule(
+        "date_compact",
+        "DATE",
+        _r(r"(?<![^\W_])(?:(?:0[1-9]|[12]\d|3[01])(?:0[1-9]|1[0-2])(?:19|20)\d{2}|(?:19|20)\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\d|3[01]))(?![^\W_])"),
+    ),
     Rule("date_iso", "DATE", _r(r"\b\d{4}-\d{2}-\d{2}\b")),
     Rule(
         "date_words_dmy",
@@ -117,6 +144,11 @@ RULES: list[Rule] = [
             r"Drive|Boulevard|Blvd\.?|Court|Ct\.|Way|Terrace|Place|Pl\.|Square|Circle|Highway|Parkway)\b"
         ),
     ),
+    Rule(
+        "street_without_number",
+        "ADDRESS",
+        _r(rf"(?<![\w-])[{_UP}][{_LOW}-]*(?:straße|strasse)\b|\b[{_UP}][{_LOW}]+[\s-](?:Straße|Strasse)\b"),
+    ),
     Rule("postcode_labelled", "LOCATION", _r(rf"(?:PLZ|D-)\s*:?\s*(\d{{5}}(?:\s+{NAME_WORD})?)"), group=1),
     # --- names with a clear hint -------------------------------------------
     Rule(
@@ -124,18 +156,43 @@ RULES: list[Rule] = [
         "PERSON",
         _r(
             r"(?:Herrn?|Frau|Hr\.|Fr\.|Mr\.?|Mrs\.?|Ms\.?|Miss|Patientin|Patient|Pat\.)"
-            r"(?:\s+(?:Dr\.(?:\s?med\.)?|Prof\.|PD))*\s+"
-            rf"({NAME_SEQ})"
+            r"(?:\s+(?:Dr\.(?:\s?med\.)?|Prof\.|PD|Dipl\.-?\s?[\w-]+\.?|M\.\s?Sc\.|B\.\s?Sc\.))*\s+"
+            rf"{_INITIALS}({NAME_SEQ})"
         ),
         group=1,
     ),
-    Rule("name_after_academic_title", "PERSON", _r(rf"(?:Dr\.(?:\s?med\.)?|Prof\.)\s+({NAME_SEQ})"), group=1),
+    Rule(
+        "name_after_academic_title",
+        "PERSON",
+        _r(rf"(?:Dr\.(?:\s?med\.)?|Prof\.|Dipl\.-?\s?[\w-]+\.?|M\.\s?Sc\.|B\.\s?Sc\.)\s+{_INITIALS}({NAME_SEQ})"),
+        group=1,
+    ),
+    Rule("name_after_relative", "PERSON", _r(rf"\b(?:{_RELATIVES})[,:]?\s+({NAME_SEQ})"), group=1),
+    # Whatever stands right before a birth date is a person: "Yıldırım, Emine, geb. 11.04.1966"
+    Rule(
+        "name_before_birth_date",
+        "PERSON",
+        _r(rf"({NAME_WORD},\s+{NAME_WORD}|{NAME_SEQ})(?=,?\s*\(?\s*(?:\*|geb\.|geboren|born\b))"),
+        group=1,
+    ),
+    # --- places and organisations with a clear shape -------------------------
+    Rule(
+        "postcode_and_city",
+        "LOCATION",
+        _r(rf"(?:^|(?<=[\s,(]))(\d{{5}}\s+{NAME_WORD})(?=\s*(?:[,.;)\n]|$))", re.MULTILINE),
+        group=1,
+    ),
+    Rule("company", "ORG", _r(rf"((?:{NAME_WORD}\s+){{1,3}}(?:{_FIRM}))(?!\w)")),
+    Rule("institution", "ORG", _r(rf"((?:{_INSTITUTION})\s+{NAME_WORD}(?:\s+{NAME_WORD})?)"), group=1),
+    Rule("name_after_colleague", "PERSON", _r(rf"\b(?:{_COLLEAGUES})\s+({NAME_SEQ})"), group=1),
+    Rule("name_in_greeting", "PERSON", _r(rf"\b(?:Liebe[rs]?|Hallo)\s+({NAME_SEQ})"), group=1),
+    Rule("name_before_email", "PERSON", _r(rf"({NAME_SEQ})\s*<[\w.+-]+@"), group=1),
     Rule(
         "name_labelled",
         "PERSON",
         _r(
-            r"(?:Name|Patientenname|Patient name|Vorname|Nachname|Surname|First name|Last name|"
-            r"Patient|Patientin|Proband|Probandin|Angehörige[rn]?)\s*:\s*"
+            r"(?:[Nn]ame|Patientenname|Patient name|Vorname|Nachname|Surname|First name|Last name|"
+            r"Patient|Patientin|Proband|Probandin|Angehörige[rn]?)[\"']?\s*:\s*[\"']?"
             rf"({NAME_WORD}(?:,?\s+{NAME_WORD}){{0,2}})"
         ),
         group=1,
@@ -157,9 +214,11 @@ class PatternDetector:
                 value = text[start:end].strip()
                 if not value:
                     continue
+                if rule.name == "date_numeric" and not (1 <= int(m.group(1)) <= 31 and 1 <= int(m.group(2)) <= 12):
+                    continue  # a dose like 10-0-10 is not a date
                 if rule.entity_type == "PERSON":
                     value = _cut_at_line_end(text, start, value)
-                    value, end = _trim_non_names(value, start)
+                    value, start = _trim_non_names(value, start)
                     if not value:
                         continue
                 spans.append(Span(start, start + len(value), rule.entity_type, value, "pattern"))
@@ -184,11 +243,18 @@ def _cut_at_line_end(text: str, start: int, value: str) -> str:
 
 
 def _trim_non_names(value: str, start: int) -> tuple[str, int]:
-    """Drop trailing/leading words like 'Data' from a detected name."""
-    words = value.split()
-    while words and words[-1].strip(",") in _NOT_NAMES:
-        words.pop()
-    if not words or words[0].strip(",") in _NOT_NAMES:
+    """A name stops at the first word that cannot be part of it; leading such words are dropped."""
+    words = list(re.finditer(r"\S+", value))
+    begin = 0
+    while begin < len(words) and words[begin].group().strip(",.") in _NOT_NAMES:
+        begin += 1
+    end = begin
+    while end < len(words) and words[end].group().strip(",.") not in _NOT_NAMES:
+        end += 1
+    if begin == end:
         return "", start
-    trimmed = value[: value.rfind(words[-1]) + len(words[-1])]
-    return trimmed, start + len(trimmed)
+    first, last = words[begin], words[end - 1]
+    trimmed = value[first.start() : last.end()].rstrip(",")
+    if trimmed.islower():
+        return "", start  # only particles like "van" are left
+    return trimmed, start + first.start()

@@ -77,6 +77,10 @@ A name alone does not identify anyone, so Privatier first reads the whole projec
   gender does not contradict it. Otherwise it gets a code of its own.
 - **Full birth dates** stay in the encrypted key file. `privatier show-key` lists them, and restoring puts them
   back into a table row when that row still contains the person's code.
+- **Birth years count too:** a `Geburtsjahr` column or "Jg. 1961" separates people and links them to a full
+  birth date, as long as only one person fits.
+- **Relatives stay separate:** in "Frau Berger kam mit ihrer Mutter Ingeborg Berger", the mother does not take
+  over the patient's code.
 - **"Please check" list:** every uncertain decision is listed at the end of a run and in the audit log, using
   codes only, never real names. Look these up with `privatier show-key`.
 
@@ -126,6 +130,8 @@ privatier anonymize sample_project
 - Free-standing names in text without a title ("Schmidt kam zur Kontrolle") are only found by the local AI
   layer or if the name already appeared elsewhere in the project.
 - Two different people with the same name and birth date and no ID cannot be told apart, and count as one person.
+- Without the local AI, names and places with no hint around them are missed. In testing on hard data this was
+  up to 5 of 39 values, so **use `--ai` for real data**.
 - Flagged people cannot be merged or split by hand yet; this is planned for the review screen.
 - A surname that is also an ordinary word (`Klein`, `Mai`) is replaced wherever it appears capitalised, even
   when it is not the name ("im Mai"). Privatier prefers this to leaving a real name behind.
@@ -161,6 +167,7 @@ src/privatier/
   engine.py     folder processing, network blocking
   cli.py        command line
 tests/          run with: pytest
+tools/          hard_data*.py: messy German test data with answer keys; add --ai to use the local model
 ```
 
 ## Licence

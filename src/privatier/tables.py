@@ -11,11 +11,13 @@ import re
 
 # Order matters: the first matching rule wins.
 _HEADER_RULES: list[tuple[str, re.Pattern[str]]] = [
+    ("BIRTH_YEAR", re.compile(r"geburtsjahr|geb_?jahr|jahrgang|birth_?year|year_?of_?birth|(^|_)yob($|_)")),
     ("DOB", re.compile(r"geb(urts)?_?dat|geburtstag|(^|_)dob($|_)|date_?of_?birth|birth_?date|birthday|(^|_)geb($|_)")),
     (
         "ID",
         re.compile(
             r"(^|_)(patient(en)?_?|pat_?|subject_?|proband(en)?_?)?id($|_)|(^|_)pid($|_)|"
+            r"versuchsperson|(^|_)vpn?($|_)|teilnehmer_?(id|nr|nummer)|(^|_)code($|_)|kennung|pseudonym|"
             r"pat(ienten)?_?(nr|nummer|number|no)($|_)|proband(en)?_?(nr|nummer)|"
             r"fall_?n(umme)?r|case_?(id|no|num|number)|(^|_)mrn($|_)|medical_?record|"
             r"versicherten_?n|kvnr|sozialversicherung|svnr|(^|_)ssn($|_)|insurance_?(no|num|number|id)|"
@@ -75,7 +77,7 @@ _OTHER_PERSON = re.compile(
 )
 _FIRST_NAME = re.compile(r"vorname|first_?name|given_?name|rufname")
 _LAST_NAME = re.compile(r"nachname|last_?name|surname|familienname")
-_GENDER = re.compile(r"^(geschlecht|sex|gender)$")
+_GENDER = re.compile(r"^(geschlecht|geschl|sex|sexus|gender)$")
 # These IDs belong to one stay or case: one patient can have several without being two people.
 _VISIT_ID = re.compile(r"fall|case|aktenzeichen|visit|besuch|aufnahme|admission")
 

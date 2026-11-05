@@ -1,6 +1,7 @@
 """One person gets one code, two people never share one, and no information is lost."""
 
 import datetime as dt
+import re
 import shutil
 
 import pandas as pd
@@ -409,3 +410,295 @@ def test_form_codes_survive_the_key_file():
     assert first == f"{base}_F" and again.original(first) == "Max"
     assert again.form_of(base, "Max", "F") == first
     assert again.new_person("Eva Klein") == "PERSON_0002"
+
+
+# --- found by testing on hard German data (tools/hard_data.py) ---------------------
+def test_mother_in_the_letter_does_not_take_over_the_patients_surname(tmp_path):
+    """The real mix-up: "Frau Berger" got the mother's code, as she was the only Berger recognised."""
+    out, _ = run(
+        tmp_path,
+        {
+            "a.csv": "Name;Score\nHannah Berger;1\n",
+            "b.txt": "Betreff Hannah Berger. Frau Berger kam mit ihrer Mutter Ingeborg Berger.\n",
+        },
+    )
+    text = (out / "b.txt").read_text(encoding="utf-8")
+    hannah = table(out, "a.csv")[1][0]
+    assert f"Frau {hannah}_L" in text
+    mother = re.search(r"Mutter (PERSON_\d+)", text).group(1)
+    assert mother != hannah
+
+
+def test_birth_date_written_with_a_month_name_counts(tmp_path):
+    out, _ = run(
+        tmp_path,
+        {
+            "a.csv": "Name;Geburtstag\nJürgen Schäfer;7. März 1949\nJürgen Schäfer;19. Juli 1971\n",
+            "b.csv": "Name;Geburtsdatum\nSchaefer, Juergen;07.03.1949\nSchaefer, Juergen;19.07.1971\n",
+        },
+    )
+    a, b = table(out, "a.csv"), table(out, "b.csv")
+    assert a[1][1] == "1949" and a[1][0] != a[2][0]
+    assert a[1][0].split("_V")[0] == b[1][0].split("_V")[0]
+    assert a[2][0].split("_V")[0] == b[2][0].split("_V")[0]
+
+
+@pytest.mark.parametrize("value, iso", [("7. März 1949", "1949-03-07"), ("March 7, 1949", "1949-03-07"), ("7 Dez. 2001", "2001-12-07")])
+def test_month_names(value, iso):
+    assert parse_birth_date(value).dates == {iso}
+
+
+def test_word_form_keeps_its_labels_and_links_the_person(tmp_path):
+    from docx import Document
+
+    src = tmp_path / "Studie"
+    src.mkdir()
+    doc = Document()
+    table_ = doc.add_table(rows=3, cols=2)
+    for r, (label, value) in enumerate([("Name, Vorname", "Sommer, Greta"), ("Geburtsdatum", "30.09.1958"), ("Teilnehmer-Nr.", "T-4471")]):
+        table_.cell(r, 0).text = label
+        table_.cell(r, 1).text = value
+    doc.add_paragraph("Ich, Greta Sommer, stimme zu. Im Sommer 2023 fand die Erhebung statt.")
+    doc.save(src / "a.docx")
+    anonymize_folder(src, PASSWORD)
+    result = Document(tmp_path / "Studie_anonymized" / "a.docx")
+    cells = [[c.text for c in row.cells] for row in result.tables[0].rows]
+    assert [row[0] for row in cells] == ["Name, Vorname", "Geburtsdatum", "Teilnehmer-Nr."]
+    assert "Sommer" not in cells[0][1] and "1958" not in cells[1][1] and "4471" not in cells[2][1]
+    sentence = result.paragraphs[0].text
+    assert "Im Sommer 2023" in sentence and "Greta" not in sentence
+    assert re.search(r"PERSON_\d+", sentence).group(0) == re.search(r"PERSON_\d+", cells[0][1]).group(0)
+
+
+class WrongAI:
+    """Finds the name, but also words that are not names, the way the real model does."""
+
+    name = "ner"
+    GUESSES = {"Thomas": "PERSON", "Pat.": "PERSON", "Vater": "PERSON", "RS": "ORG", "Lange": "PERSON",
+               "Morbus Alzheimer": "ORG", "Gruppe A": "ORG", "Werk": "ORG", "Verlauf_Berger": "PERSON"}
+
+    def detect(self, text):
+        from privatier.detect.base import Span
+
+        return [
+            Span(m.start(), m.end(), etype, word, "ner", 0.9)
+            for word, etype in self.GUESSES.items()
+            for m in re.finditer(rf"(?<!\w){re.escape(word)}(?!\w)", text)
+        ]
+
+
+def test_a_single_ai_guess_does_not_spread(tmp_path):
+    from privatier.detect import PatternDetector
+
+    out, _ = run(
+        tmp_path,
+        {
+            "a.csv": "Pat.-Nr.;Bemerkung;Werk\n1;RS mit Pat. wegen Morbus Alzheimer;x\n",
+            "b.txt": "Vater ist da. Lange Zeit gut. Gruppe A. Das Werk von Thomas.\n",
+        },
+        detectors=[PatternDetector(), WrongAI()],
+    )
+    rows = table(out, "a.csv")
+    assert rows[0] == ["Pat.-Nr.", "Bemerkung", "Werk"]
+    assert rows[1][1] == "RS mit Pat. wegen Morbus Alzheimer"
+    text = (out / "b.txt").read_text(encoding="utf-8")
+    assert text.startswith("Vater ist da. Lange Zeit gut. Gruppe A.") and "Thomas" not in text
+
+
+def test_note_in_a_table_row_belongs_to_that_rows_person(tmp_path):
+    out, _ = run(
+        tmp_path,
+        {"a.csv": "Name;Geburtsdatum;Bemerkung\nMax Schäfer;01.01.1950;Herr Schäfer kam\nEva Schäfer;02.02.1960;Frau Schäfer kam\n"},
+    )
+    rows = table(out, "a.csv")
+    assert rows[1][2].startswith(f"Herr {rows[1][0]}_L") and rows[2][2].startswith(f"Frau {rows[2][0]}_L")
+
+
+def test_genitive_and_unusual_letters(tmp_path):
+    out, _ = run(
+        tmp_path,
+        {
+            "a.csv": "Name;Geburtsdatum\nÖzlem Şahin;01.01.1980\nŁukasz Dąbrowski;02.02.1981\nMax Müller;03.03.1982\n",
+            "b.txt": "Frau Şahin kam. Herr Łukasz Dąbrowski kam. Herr Müllers Ehefrau rief an. Frau Mueller auch.\n",
+        },
+    )
+    text = (out / "b.txt").read_text(encoding="utf-8")
+    for value in ("Şahin", "Dąbrowski", "Łukasz", "Müller", "Mueller"):
+        assert value not in text
+    assert "Ehefrau rief an" in text
+
+
+def test_name_stops_at_a_disease_and_the_disease_stays(tmp_path):
+    out, _ = run(tmp_path, {"a.txt": "Frau Klara Öztürks Morbus Crohn ist stabil. Morbus Crohn bleibt.\n"})
+    text = (out / "a.txt").read_text(encoding="utf-8")
+    assert text.count("Morbus Crohn") == 2 and "Öztürk" not in text and "Klara" not in text
+
+
+@pytest.mark.parametrize(
+    "keep",
+    ["10-0-10 IE", "1-0-1", "130/80 mmHg", "Lange Zeit", "im Mai", "Im Sommer 2023", "Berger-Krankheit"],
+)
+def test_ordinary_text_survives_people_with_such_surnames(tmp_path, keep):
+    out, _ = run(
+        tmp_path,
+        {
+            "a.csv": "Name;Geburtsdatum\nJana Mai;01.01.1980\nKarl Lange;02.02.1981\nGreta Sommer;03.03.1982\nHans Berger;04.04.1983\n",
+            "b.txt": f"Vor dem Satz. {keep} und danach.\n",
+        },
+    )
+    assert keep in (out / "b.txt").read_text(encoding="utf-8")
+
+
+def test_coded_spss_column_keeps_its_codes_and_cleans_its_labels(tmp_path):
+    src = tmp_path / "Studie"
+    src.mkdir()
+    df = pd.DataFrame({"behandler": [1.0, 2.0], "vpn": [100.0, 101.0]})
+    pyreadstat.write_sav(
+        df,
+        str(src / "a.sav"),
+        column_labels=["Behandelnder Arzt", "Versuchsperson"],
+        variable_value_labels={"behandler": {1.0: "Dr. Weiß", 2.0: "Prof. Hahn"}},
+    )
+    anonymize_folder(src, PASSWORD)
+    out, meta = pyreadstat.read_sav(str(tmp_path / "Studie_anonymized" / "a.sav"))
+    assert list(out["behandler"]) == [1.0, 2.0]
+    assert "Weiß" not in str(meta.variable_value_labels) and "Hahn" not in str(meta.variable_value_labels)
+    assert list(out["vpn"])[0].startswith("ID_")  # "Versuchsperson" is a subject ID
+
+
+def test_birth_date_in_a_folder_name(tmp_path):
+    src = tmp_path / "Studie"
+    (src / "Schulz_Peter_12031948").mkdir(parents=True)
+    (src / "Schulz_Peter_12031948" / "a.txt").write_text("Patient: Schulz, Peter (*12.3.1948)\n", encoding="utf-8")
+    anonymize_folder(src, PASSWORD)
+    names = [p.name for p in (tmp_path / "Studie_anonymized").iterdir()]
+    assert not any("12031948" in n or "Schulz" in n or "Peter" in n for n in names)
+
+
+def test_the_hard_dataset_has_no_problems_with_rules_only(capsys):
+    import importlib.util
+    from pathlib import Path
+
+    path = Path(__file__).resolve().parents[1] / "tools" / "hard_data.py"
+    spec = importlib.util.spec_from_file_location("hard_data", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.show(module.run(use_ai=False)) == 0, capsys.readouterr().out
+
+
+def test_birth_year_column_keeps_two_people_apart(tmp_path):
+    """The merge found by the third hard test: Geburtsjahr was not understood as birth information."""
+    out, _ = run(tmp_path, {"a.csv": "Nachname;Vorname;Geburtsjahr;Score\nHoffmann;Karin;1961;21\nHoffmann;Karin;1984;9\n"})
+    rows = table(out, "a.csv")
+    assert rows[1][0] != rows[2][0] and rows[1][2] == "1961" and rows[2][2] == "1984"
+
+
+def test_birth_year_links_to_the_person_with_that_full_birth_date(tmp_path):
+    out, summary = run(
+        tmp_path,
+        {
+            "a.csv": "Name;Vorname;geb.\nHoffmann;Karin;23.08.1961\nHoffmann;Karin;14.12.1984\n",
+            "b.csv": "Nachname;Vorname;Jahrgang\nHoffmann;Karin;1984\n",
+            "c.txt": "Interview mit Karin Hoffmann (Jg. 1961) in der Praxis.\n",
+        },
+    )
+    a = table(out, "a.csv")
+    assert table(out, "b.csv")[1][0] == a[2][0]
+    base = re.match(r"PERSON_\d+", a[1][0]).group(0)
+    assert base in (out / "c.txt").read_text(encoding="utf-8")
+
+
+def test_name_column_next_to_first_name_is_the_surname(tmp_path):
+    out, _ = run(
+        tmp_path,
+        {
+            "a.csv": "Name;Vorname;Geburtsdatum\nHoffmann;Karin;23.08.1961\n",
+            "b.csv": "Patient;Geburtsdatum\nKarin Hoffmann;23.08.1961\n",
+        },
+    )
+    row = table(out, "a.csv")[1]
+    full = table(out, "b.csv")[1][0]
+    assert row[0] == f"{full}_L" and row[1] == f"{full}_F"
+
+
+def test_study_code_is_evidence_and_separates_people(tmp_path):
+    out, _ = run(tmp_path, {"a.csv": "Code;Nachname;Vorname\nK01;Hoffmann;Karin\nK02;Hoffmann;Karin\n"})
+    rows = table(out, "a.csv")
+    assert rows[1][1] != rows[2][1]
+
+
+def test_document_words_in_file_names_do_not_spread(tmp_path):
+    from privatier.detect import PatternDetector
+    from privatier.detect.base import Span
+
+    class FileNameAI:
+        name = "ner"
+
+        def detect(self, text):
+            return [Span(0, len(text), "PERSON", text, "ner", 0.9)] if text == "Gutachten vdBerg" else []
+
+    src = tmp_path / "Studie"
+    src.mkdir()
+    (src / "Gutachten_vdBerg.txt").write_text("Das Gutachten ist fertig.\n", encoding="utf-8")
+    anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), FileNameAI()])
+    out = tmp_path / "Studie_anonymized"
+    only = next(out.iterdir())
+    assert "vdBerg" not in only.name and only.name.startswith("Gutachten_")
+    assert only.read_text(encoding="utf-8") == "Das Gutachten ist fertig.\n"
+
+
+def test_ai_finding_stops_at_the_end_of_the_line(tmp_path):
+    from privatier.detect import PatternDetector
+    from privatier.detect.base import Span
+
+    class TwoLineAI:
+        name = "ner"
+
+        def detect(self, text):
+            needle = "Leyla Haddad\nKlient"
+            at = text.find(needle)
+            return [] if at < 0 else [Span(at, at + len(needle), "PERSON", needle, "ner", 0.9)]
+
+    out, _ = run(tmp_path, {"a.txt": "Dabei: Leyla Haddad\nKlient lebt in Deutschland.\n"}, detectors=[PatternDetector(), TwoLineAI()])
+    text = (out / "a.txt").read_text(encoding="utf-8")
+    assert "\nKlient lebt" in text and "Haddad" not in text
+
+
+def test_particles_and_professional_titles(tmp_path):
+    out, _ = run(
+        tmp_path,
+        {"a.txt": "Herr Willem van den Berg kam. Frau Dipl.-Psych. Marta Nowak untersuchte. Personalausweis L01X00T47.\nIn der Holstenstraße wohnt sie.\n"},
+    )
+    text = (out / "a.txt").read_text(encoding="utf-8")
+    for value in ("Willem", "van den Berg", "Marta", "Nowak", "L01X00T47", "Holstenstraße"):
+        assert value not in text
+    assert "wohnt sie" in text
+
+
+def test_surname_of_several_words_links_within_the_document(tmp_path):
+    out, _ = run(
+        tmp_path,
+        {"a.txt": "Gutachten über Herrn Willem van den Berg, geb. 30.04.1955. Herr van den Berg war kooperativ.\n"},
+    )
+    text = (out / "a.txt").read_text(encoding="utf-8")
+    assert "Herrn PERSON_0001," in text and "Herr PERSON_0001_" in text and "Berg" not in text
+
+
+def test_file_name_comes_back_exactly_when_read_with_spaces(tmp_path):
+    from privatier.detect import PatternDetector
+    from privatier.detect.base import Span
+
+    class NameAI:
+        name = "ner"
+
+        def detect(self, text):
+            at = text.find("Schulz Peter")
+            return [] if at < 0 else [Span(at, at + 12, "PERSON", "Schulz Peter", "ner", 0.9)]
+
+    src = tmp_path / "Studie"
+    (src / "Schulz_Peter_1").mkdir(parents=True)
+    (src / "Schulz_Peter_1" / "a.txt").write_text("x\n", encoding="utf-8")
+    anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), NameAI()])
+    assert "Schulz" not in str(list((tmp_path / "Studie_anonymized").rglob("*")))
+    restored = round_trip(tmp_path, tmp_path / "Studie_anonymized")
+    assert (restored / "Schulz_Peter_1" / "a.txt").exists()

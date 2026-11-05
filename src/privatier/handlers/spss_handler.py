@@ -5,7 +5,7 @@ from pathlib import Path
 import pandas as pd
 import pyreadstat
 
-from ..transform import Transformer
+from ..transform import Column, Transformer
 from .base import SameNameMixin
 
 
@@ -22,7 +22,12 @@ class SpssHandler(SameNameMixin):
         formats = dict(meta.original_variable_types or {})
 
         names = list(df.columns)
-        columns = [t.column(col, labels.get(col)) for col in names]
+        # A numeric column with value labels holds codes (1 = "Dr. Weiß"). The codes are data and
+        # stay as they are; the labels hold the words and are checked below.
+        columns = [
+            Column() if col in value_labels and pd.api.types.is_numeric_dtype(df[col]) else t.column(col, labels.get(col))
+            for col in names
+        ]
         new_rows = [t.row(columns, list(values)) for values in df.itertuples(index=False, name=None)]
         for i, col in enumerate(names):
             changed = pd.Series([row[i] for row in new_rows], index=df.index, dtype=object)

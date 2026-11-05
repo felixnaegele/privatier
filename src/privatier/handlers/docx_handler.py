@@ -17,6 +17,7 @@ from docx import Document
 from docx.oxml.ns import qn
 from lxml import etree
 
+from ..tables import classify_header
 from ..transform import Transformer
 
 _TEXT_PART_SUFFIXES = (
@@ -32,16 +33,46 @@ _TEXT_PART_SUFFIXES = (
 _W_P = qn("w:p")
 _TEXT_TAGS = (qn("w:t"), qn("w:delText"))
 _PERSON_ATTRS = (qn("w:author"), qn("w:initials"))
+_W_TR, _W_TC = qn("w:tr"), qn("w:tc")
+
+
+def _cell_text(cell) -> str:
+    return "".join(n.text or "" for n in cell.iter(qn("w:t"))).strip()
+
+
+def _labelled_paragraphs(root) -> dict:
+    """In a table, the cell next to or below "Fallnummer" holds a case number, whatever it looks like.
+
+    Forms have the label on the left, lists have a header row on top. Labels themselves are never values.
+    """
+    labelled = {}
+    for table in root.iter(qn("w:tbl")):
+        rows = [[c for c in tr if c.tag == _W_TC] for tr in table if tr.tag == _W_TR]
+        if not rows:
+            continue
+        heads = [classify_header(_cell_text(c)) for c in rows[0]]
+        header_row = len(rows[0]) >= 3 and sum(1 for h in heads if h) >= 2
+        for r, row in enumerate(rows):
+            for i, cell in enumerate(row):
+                if header_row:
+                    category = heads[i] if r > 0 and i < len(heads) else None
+                else:
+                    category = classify_header(_cell_text(row[i - 1])) if i % 2 == 1 else None
+                if category is not None:
+                    for p in cell.iter(_W_P):
+                        labelled[p] = category
+    return labelled
 
 
 def _transform_paragraphs(root, t: Transformer) -> None:
+    labelled = _labelled_paragraphs(root)
     for p in root.iter(_W_P):
         for tag in _TEXT_TAGS:
             nodes = [n for n in p.iter(tag) if next(n.iterancestors(_W_P), None) is p]
             if not nodes:
                 continue
             joined = "".join(n.text or "" for n in nodes)
-            new = t.text(joined)
+            new = t.labelled(labelled[p], joined) if p in labelled else t.text(joined)
             if new != joined:
                 nodes[0].text = new
                 nodes[0].set("{http://www.w3.org/XML/1998/namespace}space", "preserve")

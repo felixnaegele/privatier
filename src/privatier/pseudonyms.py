@@ -8,6 +8,7 @@ values is stored only in the encrypted key file (vault.py).
 from __future__ import annotations
 
 import re
+import unicodedata
 
 from .detect.base import ENTITY_TYPES, Span
 
@@ -22,6 +23,7 @@ TOKEN_RE = re.compile(
 
 # Types whose real values are searched for again in every other file.
 _PROPAGATE = {"PERSON", "ORG", "LOCATION", "ADDRESS", "ID", "EMAIL", "PHONE", "IBAN"}
+_UMLAUTS_OUT = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "Ä": "Ae", "Ö": "Oe", "Ü": "Ue", "ß": "ss"})
 _NAME_PART_SKIP = {"dr", "med", "prof", "herr", "frau", "mr", "mrs", "ms", "von", "van", "der", "den", "de"}
 
 
@@ -94,6 +96,8 @@ class Pseudonymizer:
             if etype not in _PROPAGATE or not _worth_propagating(original):
                 continue
             out.add((etype, original))
+            if etype == "LOCATION" and (m := re.fullmatch(r"\d{5}\s+(.+)", original)):
+                out.add((etype, m.group(1)))  # "26121 Oldenburg" also means Oldenburg on its own
             if etype == "PERSON":
                 for part in re.split(r"[\s,]+", original):
                     if len(part) >= 3 and part.casefold().strip(".") not in _NAME_PART_SKIP and part[0].isupper():
@@ -136,6 +140,19 @@ def _worth_propagating(value: str) -> bool:
     return len(v) >= 3
 
 
+def _spellings(entity_type: str, value: str) -> set[str]:
+    """A name is often written without umlauts: Müller / Mueller, Weiß / Weiss, Ayşe / Ayse."""
+    found = {value, value.upper(), value.title()}
+    if entity_type == "PERSON":
+        plain = value.translate(_UMLAUTS_OUT)
+        plain = "".join(c for c in unicodedata.normalize("NFKD", plain) if not unicodedata.combining(c))
+        with_umlauts = value
+        for written, umlaut in (("ae", "ä"), ("oe", "ö"), ("ue", "ü"), ("Ae", "Ä"), ("Oe", "Ö"), ("Ue", "Ü")):
+            with_umlauts = with_umlauts.replace(written, umlaut)
+        found |= {plain, plain.title(), plain.upper(), with_umlauts, value.replace("ss", "ß"), value.replace("ß", "ss")}
+    return found
+
+
 class KnownValueDetector:
     """Finds every value already identified anywhere in the project."""
 
@@ -146,7 +163,7 @@ class KnownValueDetector:
         self._type_of: dict[str, str] = {}
         alternatives: list[str] = []
         for etype, value in values:
-            for variant in {value, value.upper(), value.title()}:
+            for variant in _spellings(etype, value):
                 if variant not in self._type_of:
                     self._type_of[variant] = etype
                     alternatives.append(variant)
@@ -154,7 +171,7 @@ class KnownValueDetector:
         self._regex = (
             re.compile(
                 # Boundaries: a letter or digit may not touch the match, but "_" may ("Arztbrief_Schmidt").
-                r"(?<![^\W_])(" + "|".join(re.escape(a).replace(r"\ ", r"\s+") for a in alternatives) + r")(?![^\W_])"
+                r"(?<![^\W_])((?:" + "|".join(re.escape(a).replace(r"\ ", r"\s+") for a in alternatives) + r")(?:s|')?)(?![^\W_])"
             )
             if alternatives
             else None
@@ -166,6 +183,12 @@ class KnownValueDetector:
         spans = []
         for m in self._regex.finditer(text):
             matched = m.group(1)
-            etype = self._type_of.get(matched) or self._type_of.get(" ".join(matched.split()), "PERSON")
+            whole = " ".join(matched.split())
+            etype = self._type_of.get(whole)
+            if etype is None:  # the genitive: "Herr Müllers", "Frau Schulz'"
+                base = whole[:-1]
+                etype = self._type_of.get(base)
+                if etype is None or etype != "PERSON" or len(base) < 4:
+                    continue  # "Mais" is not the genitive of the surname Mai
             spans.append(Span(m.start(1), m.end(1), etype, matched, "known"))
         return spans
