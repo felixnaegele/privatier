@@ -19,3 +19,6 @@ data/
 
 # Real datasets used for local testing: never commit
 real_testdata/
+
+# Local review lists hold real text: never commit
+*_review/

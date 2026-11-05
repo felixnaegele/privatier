@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections import Counter
 from pathlib import Path
 
 from openpyxl import load_workbook
@@ -61,6 +62,48 @@ def _page_margins(ws, t: Transformer) -> None:
         for part in (section.left, section.center, section.right):
             if part.text:
                 part.text = t.text(part.text)
+
+
+def _clean_places_outside_cells(wb, src: Path, t: Transformer) -> None:
+    """Names also hide outside the cells. What can be read is cleaned; what cannot be checked is removed and reported."""
+    removed: Counter[str] = Counter()
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                link = None if isinstance(cell, MergedCell) else cell.hyperlink
+                if link is not None:
+                    for part in ("target", "location", "tooltip", "display"):
+                        if getattr(link, part, None):
+                            setattr(link, part, t.text(getattr(link, part)))
+        for rule in ws.data_validations.dataValidation if ws.data_validations else []:
+            for part in ("formula1", "formula2"):
+                if getattr(rule, part, None):
+                    setattr(rule, part, _formula(getattr(rule, part), t))
+            for part in ("prompt", "promptTitle", "error", "errorTitle"):
+                if getattr(rule, part, None):
+                    setattr(rule, part, t.text(getattr(rule, part)))
+        # Pivot tables keep a copy of the raw data; pictures and charts cannot be checked.
+        for kind, attribute in (("pivot table", "_pivots"), ("picture", "_images"), ("chart", "_charts")):
+            if getattr(ws, attribute, None):
+                removed[kind] += len(getattr(ws, attribute))
+                setattr(ws, attribute, [])
+    for prop in list(wb.custom_doc_props.props if wb.custom_doc_props else []):
+        if isinstance(prop.value, str):
+            prop.value = t.text(prop.value)
+    for name in wb.defined_names.values():
+        if name.attr_text:
+            name.attr_text = _formula(name.attr_text, t)
+    for link in getattr(wb, "_external_links", []):
+        book = getattr(link, "externalBook", None)
+        if book is not None and getattr(book, "sheetDataSet", None) is not None:
+            book.sheetDataSet = None  # values copied from another file
+            removed["stored copy of another workbook"] += 1
+        if getattr(link, "file_link", None) is not None and link.file_link.Target:
+            link.file_link.Target = t.text(link.file_link.Target)
+    for kind, count in sorted(removed.items()):
+        t.note_removed(kind, count)
+    if src.suffix.lower() == ".xlsm":
+        t.note_unchecked("this file contains macros, which are kept unchecked and can hold names")
 
 
 def _follow_renamed_sheets(wb, titles: list[str]) -> None:
@@ -147,6 +190,7 @@ class ExcelHandler(SameNameMixin):
             if new_title != ws.title:
                 ws.title = new_title
         _follow_renamed_sheets(wb, titles)
+        _clean_places_outside_cells(wb, src, t)
         wb.properties.creator = None
         wb.properties.lastModifiedBy = None
         for prop in _DOC_PROPERTIES:

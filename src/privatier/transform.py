@@ -129,6 +129,12 @@ class Transformer:
     def note_withheld_results(self, where: str) -> None:
         """A formula depends on identifying data, so its stored result was not kept."""
 
+    def note_removed(self, kind: str, count: int) -> None:
+        """Something that cannot be checked was left out of the copy."""
+
+    def note_unchecked(self, note: str) -> None:
+        """Something that cannot be checked stayed in the copy."""
+
     def file_name(self, value: str) -> str:
         return self.text(value)
 
@@ -270,6 +276,16 @@ class Anonymizer(Transformer):
     def identifies(self, index: int, column: Column) -> bool:
         action = self._column_actions.get((self.current_file, self._table, index))
         return super().identifies(index, column) or action in ("PERSON", "ID", "DATE")
+
+    def note_removed(self, kind: str, count: int) -> None:
+        if not self.collecting:
+            self.warnings.append(
+                f"{count} {kind}(s) removed from the copy, as they can hold data that cannot be checked. The original keeps them."
+            )
+
+    def note_unchecked(self, note: str) -> None:
+        if not self.collecting and note not in self.warnings:
+            self.warnings.append(f"{note}: please check.")
 
     def note_withheld_results(self, where: str) -> None:
         note = (

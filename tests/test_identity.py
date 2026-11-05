@@ -3,6 +3,7 @@
 import datetime as dt
 import re
 import shutil
+from pathlib import Path
 
 import pandas as pd
 import pyreadstat
@@ -1288,3 +1289,86 @@ def test_no_value_markers_stay_and_are_not_people(tmp_path, marker):
 def test_the_surname_na_is_not_a_no_value_marker(tmp_path):
     out, _ = run(tmp_path, {"a.csv": "Name;Geburtsdatum\nNa;01.02.1980\n"})
     assert table(out, "a.csv")[1][0].startswith("PERSON_")
+
+
+# --- files that cannot be read, and places outside the cells ------------------------
+@pytest.mark.parametrize("encoding", ["utf-16", "utf-16-le", "utf-16-be", "latin-1", "cp1252", "utf-8-sig"])
+def test_every_text_encoding_is_read_and_kept(tmp_path, encoding):
+    src = tmp_path / "Studie"
+    src.mkdir()
+    (src / "a.csv").write_bytes("Name;Geburtsdatum;Score\nJürgen Quimby;01.02.1980;1\n".encode(encoding))
+    (src / "b.txt").write_bytes("Patient Rosalind Quimby kam.\n".encode(encoding))
+    summary = anonymize_folder(src, PASSWORD)
+    assert summary.errors == []
+    for name in ("a.csv", "b.txt"):
+        out = (tmp_path / "Studie_anonymized" / name).read_bytes().decode(encoding)
+        assert "Quimby" not in out
+    assert "Score" in (tmp_path / "Studie_anonymized" / "a.csv").read_bytes().decode(encoding)
+
+
+def test_a_binary_file_with_a_text_ending_is_not_copied(tmp_path):
+    src = tmp_path / "Studie"
+    src.mkdir()
+    (src / "a.txt").write_bytes(b"Rosalind\x00\x01\x02Quimby\x00" * 3)
+    summary = anonymize_folder(src, PASSWORD)
+    assert [f for f, _ in summary.errors] == ["a.txt"]
+    assert not (tmp_path / "Studie_anonymized" / "a.txt").exists()
+
+
+@pytest.mark.parametrize("name", ["a.xlsx", "a.docx", "a.sav", "a.pdf", "a.csv"])
+def test_a_broken_file_is_never_copied(tmp_path, name):
+    src = tmp_path / "Studie"
+    src.mkdir()
+    (src / name).write_bytes(b"\x00\x01 Rosalind Quimby \x00\x02" * 5)
+    summary = anonymize_folder(src, PASSWORD)
+    assert [f for f, _ in summary.errors] == [name]
+    assert not (tmp_path / "Studie_anonymized" / name).exists()
+
+
+def test_names_outside_the_cells_of_an_excel_file(tmp_path):
+    import zipfile
+
+    from openpyxl.packaging.custom import StringProperty
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    src = tmp_path / "Studie"
+    src.mkdir()
+    wb = Workbook()
+    ws = wb.active
+    for row in [["Name", "Score", "Link"], ["Rosalind Quimby", 1, "Akte"]]:
+        ws.append(row)
+    ws["C2"].hyperlink = "mailto:rosalind.quimby@example.org"
+    rule = DataValidation(type="list", formula1='"Rosalind Quimby,Tom"', prompt="Rosalind Quimby wählen")
+    ws.add_data_validation(rule)
+    rule.add("A5")
+    wb.custom_doc_props.append(StringProperty(name="Patient", value="Rosalind Quimby"))
+    wb.save(src / "a.xlsx")
+    anonymize_folder(src, PASSWORD)
+    with zipfile.ZipFile(tmp_path / "Studie_anonymized" / "a.xlsx") as z:
+        blob = b"\n".join(z.read(n) for n in z.namelist()).decode("utf-8", "ignore")
+    assert "Quimby" not in blob and "quimby" not in blob
+
+
+def test_what_cannot_be_checked_is_removed_and_reported():
+    from privatier.handlers.excel_handler import _clean_places_outside_cells
+    from privatier.transform import Transformer
+
+    class Recorder(Transformer):
+        def __init__(self):
+            super().__init__()
+            self.removed = {}
+
+        def text(self, value):
+            return value
+
+        def note_removed(self, kind, count):
+            self.removed[kind] = count
+
+    wb = Workbook()
+    wb.active._pivots = [object(), object()]
+    wb.active._images = [object()]
+    wb.active._charts = [object()]
+    recorder = Recorder()
+    _clean_places_outside_cells(wb, Path("a.xlsx"), recorder)
+    assert recorder.removed == {"pivot table": 2, "picture": 1, "chart": 1}
+    assert wb.active._pivots == [] and wb.active._images == [] and wb.active._charts == []

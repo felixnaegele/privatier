@@ -107,6 +107,9 @@ class DocxHandler:
                 if rel.is_external:
                     rel._target = t.text(rel._target)
 
+        pictures = sum(1 for part in doc.part.package.iter_parts() if str(part.content_type).startswith("image/"))
+        if pictures:
+            t.note_unchecked(f"{pictures} picture(s) in this document were kept and cannot be checked")
         props = doc.core_properties
         props.author = ""
         props.last_modified_by = ""
