@@ -16,7 +16,7 @@ from .detect.base import Detector, Span, resolve_overlaps
 from .detect.patterns import _NOT_NAMES, NAME_SEQ, NAME_WORD
 from .detect.stopwords import is_ordinary_use, is_stopword
 from .identity import Person, Record, Registry, name_key, name_parts, parse_birth_date, surname_first
-from .pseudonyms import TOKEN_RE, KnownValueDetector, Pseudonymizer
+from .pseudonyms import GLUED_TOKEN_RE, TOKEN_RE, KnownValueDetector, Pseudonymizer
 from .tables import (
     CATEGORY_TO_TYPE,
     classify_header,
@@ -156,6 +156,10 @@ class Transformer:
         return [self.cell(_column_at(columns, i).category, v) for i, v in enumerate(values)]
 
 
+def _plain(text: str) -> str:
+    return " ".join(text.split()).casefold()
+
+
 _AGE_HEADER = re.compile(r"(^|_)(age|alter)($|_)")
 
 
@@ -198,12 +202,20 @@ def _column_at(columns: list[Column], i: int) -> Column:
     return columns[i] if i < len(columns) else Column()
 
 
+# Ways of writing "no value". A code here would look like a person who is not there.
+_NO_VALUE = {
+    "NA", "N/A", "N.A.", "n.a.", "n/a", "na", "#N/A", "NaN", "nan", "None", "none", "NONE", "null", "NULL", "unknown",
+    "Unknown", "unbekannt", "Unbekannt", "k.A.", "k. A.", "keine Angabe", "missing", "Missing", "not available", "ND",
+    "-", "--", "---", "?", "??", "???", ".",
+}
+
+
 def _blank(value) -> bool:
     if value is None or (isinstance(value, float) and value != value):
         return True
     if value != value:  # NaT
         return True
-    return isinstance(value, str) and not value.strip()
+    return isinstance(value, str) and (not value.strip() or value.strip() in _NO_VALUE)
 
 
 def _cell_text(value) -> str:
@@ -226,6 +238,8 @@ class Anonymizer(Transformer):
         self._ai_seen: dict[tuple, list] = {}
         self._has_ai = any(d.name in _AI_SOURCES for d in detectors)
         self._ai_off = False  # inside a table cell the AI is not asked about
+        self._ai_findings: set[str] = set()  # words only the AI thinks are names or organisations
+        self._no_ai_findings = False  # category cells and labels: only what rules and tables established
         self.kept_date_columns: set[str] = set()
         self._date_values: dict[tuple, dict[int, dt.date]] = {}
         self._birth_columns: set[tuple] = set()
@@ -244,6 +258,7 @@ class Anonymizer(Transformer):
         self.registry.resolve_records()
         self._find_known_people_in_text()
         self.registry.resolve_mentions()
+        self._ai_findings -= self.registry.established_words()
         self._chunks = []
         self.collecting = False
         self.detectors = self.base_detectors + [KnownValueDetector(self.pseudo)]
@@ -370,7 +385,11 @@ class Anonymizer(Transformer):
     def header(self, value: str) -> str:
         # Headers and labels are short and context-free: the AI guesses badly there
         # ("Geschlecht" as a person), so only rules and known values apply.
-        return self.text(value, use_ai=False)
+        self._no_ai_findings = True
+        try:
+            return self.text(value, use_ai=False)
+        finally:
+            self._no_ai_findings = False
 
     def text(self, value: str, use_ai: bool = True) -> str:
         if not value or not any(c.isalnum() for c in value):
@@ -383,6 +402,13 @@ class Anonymizer(Transformer):
         if self._keep_dates:
             spans = [s for s in spans if s.entity_type != "DATE"]
         spans = [_only_the_name(value, s) for s in spans]
+        if self._no_ai_findings:
+            spans = [s for s in spans if not (s.source == "known" and _plain(s.text) in self._ai_findings)]
+        if self.collecting:
+            for s in spans:
+                if s.source in _AI_SOURCES:
+                    self._ai_findings.add(_plain(s.text))
+                    self._ai_findings.update(_plain(word) for word in s.text.split())
         spans = [
             s
             for s in spans
@@ -522,8 +548,11 @@ class Anonymizer(Transformer):
             else:
                 self._keep_dates = action == "KEEP_DATES" or (column.category is None and column.dates)
                 # In the first pass the AI waits until the whole column was seen.
-                self._ai_off = self.collecting or not self._ai_may_read((self.current_file, self._table, i), value)
+                column_key_ = (self.current_file, self._table, i)
+                self._ai_off = self.collecting or not self._ai_may_read(column_key_, value)
+                self._no_ai_findings = not self.collecting and not self._column_is_free_text(column_key_)
                 new = self.cell(column.category, value)
+                self._no_ai_findings = False
                 if not self._ai_off and not self.collecting and new != value and self._has_ai:
                     note = f"the AI changed free text in column {_letters(i)}{' of ' + self._table if self._table else ''}, please check."
                     if note not in self.warnings:
@@ -733,7 +762,15 @@ class Restorer(Transformer):
             self.tokens.add(token)
             return original
 
-        return TOKEN_RE.sub(repl, value) if value else value
+        if not value:
+            return value
+        restored = TOKEN_RE.sub(repl, value)
+
+        def glued(m: re.Match[str]) -> str:
+            original = self.pseudo.original(f"{m.group(1)}_{m.group(2)}")
+            return m.group(0) if original is None else original
+
+        return GLUED_TOKEN_RE.sub(glued, restored)
 
     def classify(self, header: str | None, label: str | None = None) -> str | None:
         return classify_header(header, label)

@@ -34,6 +34,10 @@ def _normalise(entity_type: str, value: str) -> str:
     return v
 
 
+# A date glued to a word ("ECV12.3.2015") gives a code glued to a word: ECVDATE_0005, DATE_0005Reflux.
+GLUED_TOKEN_RE = re.compile(rf"({'|'.join(ENTITY_TYPES)})_(\d{{4}})(?!\d)")
+
+
 class Pseudonymizer:
     def __init__(self) -> None:
         self._key_to_token: dict[tuple[str, str], str] = {}
@@ -100,7 +104,7 @@ class Pseudonymizer:
                 out.add((etype, m.group(1)))  # "26121 Oldenburg" also means Oldenburg on its own
             if etype == "PERSON":
                 for part in re.split(r"[\s,]+", original):
-                    if len(part) >= 3 and part.casefold().strip(".") not in _NAME_PART_SKIP and part[0].isupper():
+                    if _worth_propagating(part) and part.casefold().strip(".") not in _NAME_PART_SKIP and part[0].isupper():
                         out.add(("PERSON", part))
         return sorted(out, key=lambda p: -len(p[1]))
 
@@ -137,7 +141,8 @@ def _worth_propagating(value: str) -> bool:
     v = value.strip()
     if v.isdigit():
         return len(v) >= 5  # short numbers like "12" would match everywhere
-    return len(v) >= 3
+    # "St." is three characters but no name: it would hit every "St. Jude Medical".
+    return sum(c.isalnum() for c in v) >= 3
 
 
 def _spellings(entity_type: str, value: str) -> set[str]:

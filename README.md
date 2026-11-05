@@ -190,6 +190,7 @@ src/privatier/
   cli.py        command line
 tests/          run with: pytest
 tools/          hard_data*.py: messy German and English test data with answer keys; add --ai to use the local model
+                compare_stats.py: proves an analysis gives the same answer before and after, on your own folder
 ```
 
 ## Licence

@@ -1227,3 +1227,64 @@ def test_replaced_numbers_are_not_put_back(tmp_path):
     anonymize_folder(excel(tmp_path, rows), PASSWORD)
     result = output_rows(tmp_path)
     assert result[1][0].startswith("ID_") and result[1][1] == 1975 and result[1][2] == 5
+
+
+def test_ai_finding_in_free_text_does_not_spread_to_categories_or_labels(tmp_path):
+    from privatier.detect import PatternDetector
+    from privatier.detect.base import Span
+
+    class DeviceAI:
+        name = "ner"
+
+        def detect(self, text):
+            at = text.find("Mitra Clip")
+            return [] if at < 0 else [Span(at, at + 10, "ORG", "Mitra Clip", "ner", 0.9)]
+
+    rows = "".join(f"P{i};Mitra Clip;Note {i} about the valve from Mitra Clip today\n" for i in range(25))
+    out, _ = run(tmp_path, {"a.csv": "ID;Klappe;Notes\n" + rows}, detectors=[PatternDetector(), DeviceAI()])
+    lines = table(out, "a.csv")
+    assert lines[1][1] == "Mitra Clip" and "Mitra Clip" not in lines[1][2]
+
+
+def test_name_from_a_table_still_reaches_a_category_column(tmp_path):
+    rows = "".join(f"P{i};Tom Berg;Tom Berg;x\n" for i in range(3))
+    out, _ = run(tmp_path, {"a.csv": "ID;Name;Betreuer;Score\n" + rows})
+    assert "Berg" not in str(table(out, "a.csv"))
+
+
+def test_fragment_of_a_name_does_not_spread(tmp_path):
+    out, _ = run(
+        tmp_path,
+        {"a.txt": "Rückfrage bei Dr. St. wegen Befund.\n", "b.csv": "ID;Klappe\n" + "".join(f"P{i};St. Jude Medical\n" for i in range(5))},
+    )
+    assert table(out, "b.csv")[1][1] == "St. Jude Medical"
+
+
+def test_codes_glued_to_a_word_are_restored(tmp_path):
+    text = "ECV12.3.2015 ok, 8.1.2018Reflux, siehe Z.n.3.4.2019\n"
+    out, _ = run(tmp_path, {"a.txt": text})
+    assert "12.3.2015" not in (out / "a.txt").read_text(encoding="utf-8")
+    restored = round_trip(tmp_path, out)
+    assert (restored / "a.txt").read_text(encoding="utf-8") == text
+
+
+def test_plain_words_like_codes_are_left_alone_on_restore():
+    p = Pseudonymizer()
+    from privatier.transform import Restorer
+
+    assert Restorer(p).text("UPDATE_0001 and DATE_9999") == "UPDATE_0001 and DATE_9999"
+
+
+@pytest.mark.parametrize("marker", ["NA", "n.a.", "-", "?", "unknown", "k.A."])
+def test_no_value_markers_stay_and_are_not_people(tmp_path, marker):
+    out, summary = run(
+        tmp_path,
+        {"a.csv": f"Patient ID;Name;Geburtsdatum;Investigator\n{marker};{marker};{marker};{marker}\nP1;Ana Ruiz;01.02.1980;Dr. Pohl\n"},
+    )
+    assert table(out, "a.csv")[1] == [marker, marker, marker, marker]
+    assert "Ruiz" not in str(table(out, "a.csv")[2])
+
+
+def test_the_surname_na_is_not_a_no_value_marker(tmp_path):
+    out, _ = run(tmp_path, {"a.csv": "Name;Geburtsdatum\nNa;01.02.1980\n"})
+    assert table(out, "a.csv")[1][0].startswith("PERSON_")

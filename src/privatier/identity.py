@@ -383,6 +383,22 @@ class Registry:
                 for spelling in record.spellings:
                     self.pseudo.form_of(owner.token, spelling, self.form_for(owner, spelling))
 
+    def established_words(self) -> set[str]:
+        """Names and name parts that tables or rules established, whatever the AI also thinks of them."""
+        words: set[str] = set()
+        for record in self.records.values():
+            for spelling in record.spellings:
+                text = " ".join(spelling.split()).casefold()
+                words.add(text)
+                words.update(text.split())
+        for evidence in self.files.values():
+            for mention in evidence.mentions:
+                if not mention.from_ai:
+                    text = " ".join(mention.text.split()).casefold()
+                    words.add(text)
+                    words.update(text.split())
+        return words
+
     def _new_person(self, record: Record) -> Person:
         person = Person(self.pseudo.new_person(record.canonical), record.key, record.canonical)
         person.absorb(record)

@@ -36,7 +36,7 @@ class SpssHandler(SameNameMixin):
                 if changed.map(lambda v: isinstance(v, str)).any() or df[col].dtype == object:
                     df[col] = changed
                     if changed.map(lambda v: isinstance(v, str)).any():
-                        formats.pop(col, None)  # a stored text width like A5 may be too short for a code
+                        formats.pop(col, None)  # the width follows the longest value, a code must fit
                 continue
             # The column's content changed type (e.g. numbers became tokens): these no longer apply.
             value_labels.pop(col, None)
