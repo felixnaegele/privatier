@@ -65,7 +65,7 @@ doc.add_paragraph("Der Mini-Mental-Status-Test ergab 27 Punkte. Der Clock-Drawin
 doc.save(src / "Gutachten_vdBerg.docx")
 
 summary = anonymize_folder(src, "third password", use_ai=use_ai)
-out = work / "Psych_Studie_anonymized"
+out = work / "Psych_Studie_pseudonymised"
 
 texts = {}
 for p in out.rglob("*"):

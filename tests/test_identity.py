@@ -24,7 +24,7 @@ def run(tmp_path, files: dict[str, str], **kwargs):
     for name, content in files.items():
         (src / name).write_text(content, encoding="utf-8")
     summary = anonymize_folder(src, PASSWORD, **kwargs)
-    return tmp_path / "Studie_anonymized", summary
+    return tmp_path / "Studie_pseudonymised", summary
 
 
 def table(out, name):
@@ -259,7 +259,7 @@ def test_file_names_are_kept_and_tokens_in_result_names_are_restored(tmp_path):
     src.mkdir()
     (src / "Akte_Anna_Schmidt_12031948.txt").write_text("Patientin Anna Schmidt", encoding="utf-8")
     anonymize_folder(src, PASSWORD)
-    out = tmp_path / "Studie_anonymized"
+    out = tmp_path / "Studie_pseudonymised"
     assert [p.name for p in out.iterdir()] == ["Akte_Anna_Schmidt_12031948.txt"]
     results = tmp_path / "Ergebnisse"
     results.mkdir()
@@ -327,7 +327,7 @@ def test_spss_keeps_user_missing_codes_labels_and_notes(tmp_path):
         variable_format={"score": "F8.2"},
     )
     anonymize_folder(src, PASSWORD)
-    out, meta = pyreadstat.read_sav(str(tmp_path / "Studie_anonymized" / "a.sav"), user_missing=True)
+    out, meta = pyreadstat.read_sav(str(tmp_path / "Studie_pseudonymised" / "a.sav"), user_missing=True)
     assert list(out["score"]) == [12.5, 99.0]
     assert meta.missing_ranges["score"] == [{"lo": 99.0, "hi": 99.0}]
     assert meta.variable_value_labels["score"] == {99.0: "verweigert"}
@@ -358,7 +358,7 @@ def test_excel_formulas_page_headers_and_properties(tmp_path):
     wb.properties.title = "Akte Ute Sommer"
     wb.save(src / "a.xlsx")
     anonymize_folder(src, PASSWORD)
-    result = load_workbook(tmp_path / "Studie_anonymized" / "a.xlsx")
+    result = load_workbook(tmp_path / "Studie_pseudonymised" / "a.xlsx")
     sheet = result.active
     assert sheet["A2"].value == "PERSON_0001_F" and sheet["B2"].value == "PERSON_0001_L"
     assert sheet["E3"].value == "=D2+D3"
@@ -479,7 +479,7 @@ def test_word_form_keeps_its_labels_and_links_the_person(tmp_path):
     doc.add_paragraph("Ich, Greta Sommer, stimme zu. Im Sommer 2023 fand die Erhebung statt.")
     doc.save(src / "a.docx")
     anonymize_folder(src, PASSWORD)
-    result = Document(tmp_path / "Studie_anonymized" / "a.docx")
+    result = Document(tmp_path / "Studie_pseudonymised" / "a.docx")
     cells = [[c.text for c in row.cells] for row in result.tables[0].rows]
     assert [row[0] for row in cells] == ["Name, Vorname", "Geburtsdatum", "Teilnehmer-Nr."]
     assert "Sommer" not in cells[0][1] and "1958" not in cells[1][1] and "4471" not in cells[2][1]
@@ -583,7 +583,7 @@ def test_coded_spss_column_keeps_its_codes_and_cleans_its_labels(tmp_path):
         variable_value_labels={"behandler": {1.0: "Dr. Weiß", 2.0: "Prof. Hahn"}},
     )
     anonymize_folder(src, PASSWORD)
-    out, meta = pyreadstat.read_sav(str(tmp_path / "Studie_anonymized" / "a.sav"))
+    out, meta = pyreadstat.read_sav(str(tmp_path / "Studie_pseudonymised" / "a.sav"))
     assert list(out["behandler"]) == [1.0, 2.0]
     assert "Weiß" not in str(meta.variable_value_labels) and "Hahn" not in str(meta.variable_value_labels)
     assert list(out["vpn"])[0].startswith("ID_")  # "Versuchsperson" is a subject ID
@@ -594,7 +594,7 @@ def test_folder_names_stay_too(tmp_path):
     (src / "Schulz_Peter_12031948").mkdir(parents=True)
     (src / "Schulz_Peter_12031948" / "a.txt").write_text("Patient: Schulz, Peter (*12.3.1948)\n", encoding="utf-8")
     anonymize_folder(src, PASSWORD)
-    result = tmp_path / "Studie_anonymized" / "Schulz_Peter_12031948" / "a.txt"
+    result = tmp_path / "Studie_pseudonymised" / "Schulz_Peter_12031948" / "a.txt"
     assert "Schulz" not in result.read_text(encoding="utf-8")
 
 
@@ -657,7 +657,7 @@ def test_words_in_file_names_are_not_read_as_names(tmp_path):
     src.mkdir()
     (src / "Gutachten_Verlauf.txt").write_text("Das Gutachten und der Verlauf.\n", encoding="utf-8")
     anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), WrongAI()])
-    only = next((tmp_path / "Studie_anonymized").iterdir())
+    only = next((tmp_path / "Studie_pseudonymised").iterdir())
     assert only.name == "Gutachten_Verlauf.txt" and only.read_text(encoding="utf-8") == "Das Gutachten und der Verlauf.\n"
 
 
@@ -715,7 +715,7 @@ def excel(tmp_path, rows, name="a.xlsx"):
 
 
 def output_rows(tmp_path, name="a.xlsx"):
-    return [list(r) for r in load_workbook(tmp_path / "Studie_anonymized" / name).active.iter_rows(values_only=True)]
+    return [list(r) for r in load_workbook(tmp_path / "Studie_pseudonymised" / name).active.iter_rows(values_only=True)]
 
 
 @pytest.mark.parametrize(
@@ -860,7 +860,7 @@ def test_spss_coded_columns_with_code_in_the_name_stay(tmp_path):
     df = pd.DataFrame({"pat_id": [1000.0, 1001.0], "code_sex": [1.0, 2.0], "ENDOCARDITIS_CODE": [0.0, 1.0]})
     pyreadstat.write_sav(df, str(src / "a.sav"))
     anonymize_folder(src, PASSWORD)
-    out, _ = pyreadstat.read_sav(str(tmp_path / "Studie_anonymized" / "a.sav"))
+    out, _ = pyreadstat.read_sav(str(tmp_path / "Studie_pseudonymised" / "a.sav"))
     assert list(out["code_sex"]) == [1.0, 2.0] and list(out["ENDOCARDITIS_CODE"]) == [0.0, 1.0]
     assert out["pat_id"].iloc[0].startswith("ID_")
 
@@ -937,7 +937,7 @@ def test_the_ai_is_only_asked_about_real_free_text_in_tables(tmp_path):
     ) + "P99;Placebo;T0;Aortic Stenosis;Kim Ross called the ward\n"
     (src / "Double_Valve.csv").write_text(header + rows, encoding="utf-8")
     anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), EagerAI()])
-    out = tmp_path / "Studie_anonymized" / "Double_Valve.csv"
+    out = tmp_path / "Studie_pseudonymised" / "Double_Valve.csv"
     assert out.exists()
     lines = out.read_text(encoding="utf-8-sig").splitlines()
     assert lines[1].split(";")[1:4] == ["Placebo", "T0", "Aortic Stenosis"]
@@ -962,7 +962,7 @@ def test_spss_surgery_date_keeps_day_and_month(tmp_path):
     df = pd.DataFrame({"pat_id": [1000.0, 1001.0], "date_surgery": pd.to_datetime(["2020-02-03", "2021-05-06"])})
     pyreadstat.write_sav(df, str(src / "a.sav"))
     anonymize_folder(src, PASSWORD)
-    out, _ = pyreadstat.read_sav(str(tmp_path / "Studie_anonymized" / "a.sav"))
+    out, _ = pyreadstat.read_sav(str(tmp_path / "Studie_pseudonymised" / "a.sav"))
     assert out["date_surgery"].iloc[0] == pd.Timestamp("2020-02-03")
 
 
@@ -1079,7 +1079,7 @@ def excel_with_results(tmp_path, rows, results, name="a.xlsx", sheets=None):
 
 
 def stored_values(tmp_path, name="a.xlsx", sheet=0):
-    return load_workbook(tmp_path / "Studie_anonymized" / name, data_only=True).worksheets[sheet]
+    return load_workbook(tmp_path / "Studie_pseudonymised" / name, data_only=True).worksheets[sheet]
 
 
 def test_formula_results_survive_for_tools_that_do_not_recalculate(tmp_path):
@@ -1091,9 +1091,9 @@ def test_formula_results_survive_for_tools_that_do_not_recalculate(tmp_path):
     sheet = stored_values(tmp_path)
     assert sheet["D2"].value == 27.7 and sheet["E2"].value == 0
     assert sheet["F2"].value == "normal" and sheet["G2"].value is False
-    assert load_workbook(tmp_path / "Studie_anonymized" / "a.xlsx").active["D2"].value == "=B2/C2^2"
+    assert load_workbook(tmp_path / "Studie_pseudonymised" / "a.xlsx").active["D2"].value == "=B2/C2^2"
     assert summary.warnings == []
-    frame = pd.read_excel(tmp_path / "Studie_anonymized" / "a.xlsx")
+    frame = pd.read_excel(tmp_path / "Studie_pseudonymised" / "a.xlsx")
     assert frame["BMI"].iloc[0] == 27.7  # what Python, R and AI tools read
 
 
@@ -1181,7 +1181,7 @@ def test_formula_follows_a_renamed_sheet(tmp_path):
     other.append(["='Frau Max Müller'!A2"])
     wb.save(src / "a.xlsx")
     anonymize_folder(src, PASSWORD)
-    result = load_workbook(tmp_path / "Studie_anonymized" / "a.xlsx")
+    result = load_workbook(tmp_path / "Studie_pseudonymised" / "a.xlsx")
     assert "Müller" not in result.worksheets[0].title
     assert "Müller" not in result["Auswertung"]["A2"].value and result.worksheets[0].title in result["Auswertung"]["A2"].value
 
@@ -1190,7 +1190,7 @@ def test_restore_keeps_stored_results(tmp_path):
     rows = [["Patient ID", "Weight", "Double"], ["P1", 90, "=B2*2"]]
     src = excel_with_results(tmp_path, rows, [{"C2": (None, "180")}])
     anonymize_folder(src, PASSWORD)
-    restored = round_trip(tmp_path, tmp_path / "Studie_anonymized")
+    restored = round_trip(tmp_path, tmp_path / "Studie_pseudonymised")
     sheet = load_workbook(restored / "a.xlsx", data_only=True).active
     assert sheet["A2"].value == "P1" and sheet["C2"].value == 180
 
@@ -1218,7 +1218,7 @@ def test_numbers_keep_every_digit(tmp_path):
         for name, data in parts.items():
             z.writestr(name, data)
     anonymize_folder(src, PASSWORD)
-    out = tmp_path / "Studie_anonymized" / "a.xlsx"
+    out = tmp_path / "Studie_pseudonymised" / "a.xlsx"
     assert read_exact_numbers(out)[0]["C2"] == "41.123456789012345"
     assert load_workbook(out).active["C2"].value == load_workbook(source).active["C2"].value
 
@@ -1301,9 +1301,9 @@ def test_every_text_encoding_is_read_and_kept(tmp_path, encoding):
     summary = anonymize_folder(src, PASSWORD)
     assert summary.errors == []
     for name in ("a.csv", "b.txt"):
-        out = (tmp_path / "Studie_anonymized" / name).read_bytes().decode(encoding)
+        out = (tmp_path / "Studie_pseudonymised" / name).read_bytes().decode(encoding)
         assert "Quimby" not in out
-    assert "Score" in (tmp_path / "Studie_anonymized" / "a.csv").read_bytes().decode(encoding)
+    assert "Score" in (tmp_path / "Studie_pseudonymised" / "a.csv").read_bytes().decode(encoding)
 
 
 def test_a_binary_file_with_a_text_ending_is_not_copied(tmp_path):
@@ -1312,7 +1312,7 @@ def test_a_binary_file_with_a_text_ending_is_not_copied(tmp_path):
     (src / "a.txt").write_bytes(b"Rosalind\x00\x01\x02Quimby\x00" * 3)
     summary = anonymize_folder(src, PASSWORD)
     assert [f for f, _ in summary.errors] == ["a.txt"]
-    assert not (tmp_path / "Studie_anonymized" / "a.txt").exists()
+    assert not (tmp_path / "Studie_pseudonymised" / "a.txt").exists()
 
 
 @pytest.mark.parametrize("name", ["a.xlsx", "a.docx", "a.sav", "a.pdf", "a.csv"])
@@ -1322,7 +1322,7 @@ def test_a_broken_file_is_never_copied(tmp_path, name):
     (src / name).write_bytes(b"\x00\x01 Rosalind Quimby \x00\x02" * 5)
     summary = anonymize_folder(src, PASSWORD)
     assert [f for f, _ in summary.errors] == [name]
-    assert not (tmp_path / "Studie_anonymized" / name).exists()
+    assert not (tmp_path / "Studie_pseudonymised" / name).exists()
 
 
 def test_names_outside_the_cells_of_an_excel_file(tmp_path):
@@ -1344,7 +1344,7 @@ def test_names_outside_the_cells_of_an_excel_file(tmp_path):
     wb.custom_doc_props.append(StringProperty(name="Patient", value="Rosalind Quimby"))
     wb.save(src / "a.xlsx")
     anonymize_folder(src, PASSWORD)
-    with zipfile.ZipFile(tmp_path / "Studie_anonymized" / "a.xlsx") as z:
+    with zipfile.ZipFile(tmp_path / "Studie_pseudonymised" / "a.xlsx") as z:
         blob = b"\n".join(z.read(n) for n in z.namelist()).decode("utf-8", "ignore")
     assert "Quimby" not in blob and "quimby" not in blob
 

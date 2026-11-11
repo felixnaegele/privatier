@@ -51,20 +51,20 @@ def all_output_text(folder: Path) -> str:
 
 def test_no_sensitive_value_left(project):
     root, _, _ = project
-    text = all_output_text(root / "Studie_anonymized")
+    text = all_output_text(root / "Studie_pseudonymised")
     leaks = [value for value in SENSITIVE if value in text]
     assert leaks == [], f"Sensitive values found in output: {leaks}"
 
 
 def test_file_names_stay_so_that_people_can_keep_track(project):
     root, _, summary = project
-    assert (root / "Studie_anonymized" / "Arztbrief_Schmidt.docx").exists()
+    assert (root / "Studie_pseudonymised" / "Arztbrief_Schmidt.docx").exists()
     assert any("name(s) contain" in note for note in summary.notes)
 
 
 def test_unsupported_files_are_not_copied(project):
     root, _, summary = project
-    out = root / "Studie_anonymized"
+    out = root / "Studie_pseudonymised"
     assert not list(out.rglob("*.jpg"))
     assert not list(out.rglob(".DS_Store"))
     assert ("scan_befund.jpg", "file type '.jpg' not supported yet") in summary.skipped
@@ -75,7 +75,7 @@ def test_key_and_audit_kept_outside_output(project):
     root, _, _ = project
     work = root / "Studie_privatier"
     assert (work / KEY_FILE).exists() and (work / AUDIT_FILE).exists()
-    assert not list((root / "Studie_anonymized").rglob("*.vault"))
+    assert not list((root / "Studie_pseudonymised").rglob("*.vault"))
 
 
 def test_audit_log_contains_no_sensitive_values(project):
@@ -90,7 +90,7 @@ def test_audit_log_contains_no_sensitive_values(project):
 
 def test_birth_dates_become_years(project):
     root, _, _ = project
-    out = root / "Studie_anonymized" / "daten"
+    out = root / "Studie_pseudonymised" / "daten"
     df, _ = pyreadstat.read_sav(str(out / "fragebogen.sav"))
     assert list(df["gebdat"]) == [1975, 1962, 1958]
     ws = load_workbook(out / "outcomes.xlsx").active
@@ -101,7 +101,7 @@ def test_birth_dates_become_years(project):
 
 def test_same_value_same_token_across_files(project):
     root, _, _ = project
-    out = root / "Studie_anonymized"
+    out = root / "Studie_pseudonymised"
     docx_xml = zipfile.ZipFile(next(out.glob("Arztbrief_*.docx"))).read("word/document.xml").decode()
     # "Anna Schmidt" appears twice in the letter (body + table) -> same token both times
     import re
@@ -112,7 +112,7 @@ def test_same_value_same_token_across_files(project):
 
 def test_restore_round_trip(project, tmp_path):
     root, _, _ = project
-    out = root / "Studie_anonymized"
+    out = root / "Studie_pseudonymised"
     letter = zipfile.ZipFile(next(out.glob("Arztbrief_*.docx"))).read("word/document.xml").decode()
     import re
 
@@ -158,7 +158,7 @@ def test_failed_ai_model_leaves_nothing_behind(tmp_path, monkeypatch):
     src = make(tmp_path / "Studie")
     with pytest.raises(RuntimeError):
         anonymize_folder(src, PASSWORD, use_ai=True)
-    assert not (tmp_path / "Studie_anonymized").exists()
+    assert not (tmp_path / "Studie_pseudonymised").exists()
     assert not (tmp_path / "Studie_privatier").exists()
 
 
@@ -190,7 +190,7 @@ def test_ai_false_alarms_do_not_damage_data(tmp_path):
         "Schmidt kam heute zur Kontrolle, begleitet von ihrem Mann Thomas aus Hamburg.", encoding="utf-8"
     )
     anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), FakeAI()])
-    out = tmp_path / "Studie_anonymized"
+    out = tmp_path / "Studie_pseudonymised"
 
     note = (out / "notiz.txt").read_text(encoding="utf-8")
     assert "Thomas" not in note and "Hamburg" not in note and "Schmidt" not in note
@@ -214,6 +214,6 @@ def test_ai_does_not_replace_wir(tmp_path):
     (src / "notiz.txt").write_text("Wir berichten über Thomas aus Hamburg.", encoding="utf-8")
     anonymize_folder(src, PASSWORD, detectors=[PatternDetector(), FakeAI()])
 
-    note = (tmp_path / "Studie_anonymized" / "notiz.txt").read_text(encoding="utf-8")
+    note = (tmp_path / "Studie_pseudonymised" / "notiz.txt").read_text(encoding="utf-8")
     assert note.startswith("Wir berichten über ")
     assert "Thomas" not in note and "Hamburg" not in note

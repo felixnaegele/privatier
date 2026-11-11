@@ -121,3 +121,16 @@ CATEGORY_TO_TYPE = {
     "EMAIL": "EMAIL",
     "PHONE": "PHONE",
 }
+
+
+# Age and sex: what someone who knows a patient would know. Used to count who can be singled out.
+_AGE = re.compile(r"(^|_)(age|alter)\d*($|_)")
+_SEX = re.compile(r"(^|_)(sex|sexus|gender|geschlecht|geschl)\d*($|_)|^(female|male|weiblich|maennlich)$|^m_?[wf]$")
+
+
+def is_age_column(*names: str | None) -> bool:
+    return any(name and _AGE.search(_norm(name)) for name in names)
+
+
+def is_sex_column(*names: str | None) -> bool:
+    return any(name and _SEX.search(_norm(name)) for name in names)

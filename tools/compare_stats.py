@@ -229,7 +229,7 @@ def main() -> int:
         summary = anonymize_folder(source, PASSWORD, use_ai=args.ai)
         print(f"Anonymised in {(dt.datetime.now() - started).seconds} s, files with errors: {len(summary.errors)}")
         failures = len(summary.errors)
-        output = work / "data_anonymized"
+        output = work / "data_pseudonymised"
         failures += compare_folder(source, output, "ORIGINAL vs ANONYMISED")
 
         results = work / "results"

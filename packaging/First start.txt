@@ -1,0 +1,20 @@
+Privatier: first start
+======================
+
+1. Drag Privatier onto the Applications folder in this window.
+
+2. Open Privatier from Applications (double-click).
+
+3. The first time, your Mac says it cannot check the app, because Privatier is not signed by Apple yet.
+   This is expected and the app is safe to open. Click "Done" (do not click "Move to Trash"). Then do this once:
+
+   - Open the Apple menu > System Settings > Privacy & Security.
+   - Scroll down to the section "Security". You see: "Privatier was blocked to protect your Mac".
+   - Click "Open Anyway", enter your Mac password (or use Touch ID), and click "Open".
+
+From then on Privatier opens like any other app. You do not need to do this again.
+
+Good to know
+- Privatier works completely offline. The AI that finds names is part of the app. Your files never leave your Mac.
+- The first start takes a little longer than usual (about half a minute): the AI is loaded.
+- Needs macOS 14 (Sonoma) or newer on a Mac with an Apple chip (M1 or newer).

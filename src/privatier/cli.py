@@ -17,6 +17,7 @@ from pathlib import Path
 
 from . import __version__
 from .engine import KEY_FILE, anonymize_folder, default_paths, restore_folder
+from .privacy import LEVELS
 from .pseudonyms import Pseudonymizer
 from .vault import WrongPasswordError, load_vault
 
@@ -92,11 +93,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--version", action="version", version=f"privatier {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    a = sub.add_parser("anonymize", help="create an anonymised copy of a folder")
+    a = sub.add_parser("anonymize", help="create a copy of a folder with identifying details replaced")
     a.add_argument("folder", type=Path)
     a.add_argument("--output", type=Path, help="where to write the anonymised copy")
     a.add_argument("--key-dir", type=Path, help="where to keep key file and audit log (keep private!)")
     a.add_argument("--ai", action="store_true", help="also use the local AI model for name recognition")
+    a.add_argument(
+        "--level",
+        type=int,
+        choices=[1, 2, 3, 4],
+        default=1,
+        help="privacy level: 1 pseudonymised (default), 2 less detail, 3 strongly reduced, 4 anonymisation attempt",
+    )
     a.add_argument(
         "--link-by-name",
         action="store_true",
@@ -116,20 +124,26 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.command == "anonymize":
-            default_out, default_work = default_paths(args.folder)
+            default_out, default_work = default_paths(args.folder, args.level)
             _refuse_existing(args.output or default_out)
             key_exists = ((args.key_dir or default_work) / KEY_FILE).exists()
             summary = anonymize_folder(
                 args.folder,
-                _password(confirm=not key_exists),
+                _password(confirm=not key_exists) if LEVELS[args.level].keeps_key else "",
                 output_dir=args.output,
                 work_dir=args.key_dir,
                 use_ai=args.ai,
                 link_by_name=args.link_by_name,
+                level=args.level,
             )
-            _print_summary("Anonymisation finished.", summary)
+            _print_summary(f"Finished: {summary.verdict.label}.", summary)
+            for reason in summary.verdict.reasons:
+                print(f"    - {reason}")
             work = (args.key_dir or default_work).resolve()
-            print(f"\n  Key file and audit log (keep private, never upload): {work}")
+            if LEVELS[args.level].keeps_key:
+                print(f"\n  Key file and audit log (keep private, never upload): {work}")
+            else:
+                print(f"\n  No key was kept. Report and audit log: {work}")
         elif args.command == "restore":
             _refuse_existing(args.output or args.folder.resolve().with_name(args.folder.resolve().name + "_restored"))
             summary = restore_folder(args.folder, args.key, _password(confirm=False), output_dir=args.output)

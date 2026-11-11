@@ -8,6 +8,10 @@ dist/
 
 # Never commit data, outputs or key files
 *_anonymized/
+*_pseudonymised/
+*_less_detail/
+*_reduced/
+*_level4/
 *_privatier/
 *_restored/
 *.vault

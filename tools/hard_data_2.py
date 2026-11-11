@@ -76,7 +76,7 @@ doc.add_paragraph("Ich, Greta Sommer, stimme zu. Im Sommer 2023 fand die Erhebun
 doc.save(src / "Korrespondenz" / "Einwilligung_Sommer_Greta.docx")
 
 summary = anonymize_folder(src, PW, use_ai=use_ai)
-out = work / "Projekt_anonymized"
+out = work / "Projekt_pseudonymised"
 
 texts = {}
 for p in out.rglob("*"):

@@ -272,11 +272,58 @@ class FileEvidence:
     people: set[str] = field(default_factory=set)  # tokens of people who appear in this file
 
 
+# --------------------------------------------------------------------------- questions
+@dataclass
+class Question:
+    """Something the data does not settle. Holds real names, so it goes to the user's screen and nowhere else."""
+
+    id: str
+    kind: str
+    text: str
+    options: list[tuple[str, str]]  # (value, what the button says)
+    files: set[str] = field(default_factory=set)
+    payload: object = None
+    count: int = 0
+
+
+@dataclass
+class Decisions:
+    """The user's answers. Unanswered means what it always meant: kept apart."""
+
+    columns: dict[tuple, str] = field(default_factory=dict)  # (file, table, column) -> DOB, KEEP_DATES, PERSON, ID, KEEP
+    names_same: set[tuple] = field(default_factory=set)
+    names_apart: set[tuple] = field(default_factory=set)
+    records: dict[tuple, object] = field(default_factory=dict)  # record -> the person it belongs to, None for apart
+    mentions: dict[tuple, bool] = field(default_factory=dict)  # (file, name) -> does it refer to that person
+
+    def apply(self, question: Question, value: str) -> None:
+        if question.kind == "column":
+            if value != "UNSURE":
+                self.columns[question.payload] = value
+        elif question.kind == "same_name":
+            (self.names_same if value == "same" else self.names_apart).add(question.payload)
+        elif question.kind == "which":
+            identity, candidates = question.payload
+            self.records[identity] = None if value == "apart" else candidates[int(value)]
+        elif question.kind == "same_birth":
+            identity, other = question.payload
+            self.records[identity] = other if value == "same" else None
+        elif question.kind == "mention":
+            self.mentions[question.payload] = value == "yes"
+
+
+_UNDERSTOOD = [("ok", "Understood")]
+
+
 # --------------------------------------------------------------------------- registry
 class Registry:
-    def __init__(self, pseudonymizer: Pseudonymizer, link_by_name: bool = False):
+    def __init__(self, pseudonymizer: Pseudonymizer, link_by_name: bool = False, decisions: Decisions | None = None):
         self.pseudo = pseudonymizer
         self.link_by_name = link_by_name
+        self.decisions = decisions or Decisions()
+        self.questions: dict[str, Question] = {}
+        self._by_ref: dict[object, Person] = {}
+        self._ref_of: dict[str, object] = {}
         self.records: dict[tuple, Record] = {}
         self.files: dict[str, FileEvidence] = {}
         self.people: list[Person] = [Person.from_dict(p) for p in pseudonymizer.people]
@@ -284,6 +331,8 @@ class Registry:
         self._by_key: dict[tuple[str, ...], list[Person]] = {}
         for person in self.people:
             self._by_key.setdefault(person.key, []).append(person)
+            self._by_ref[person.token] = person
+            self._ref_of[person.token] = person.token
         self._record_owner: dict[tuple, Person] = {}
         self.review: list[str] = []  # questions for the user, codes only
         self.settled: list[str] = []  # decided by the data, for the audit log only
@@ -364,6 +413,13 @@ class Registry:
                 f"{', '.join(shared)} are different people with the same ID number in the original data. "
                 "The ID keeps one code, as in the original: please check whether these IDs come from different lists."
             )
+            people = [self._by_token[token] for token in shared]
+            self._ask(
+                f"shared_id|{sorted(p.key for p in people)}", "info",
+                f"{' and '.join(self._describe(p) for p in people)} are different people with the same ID number in the "
+                "original data. The ID keeps one code, as in the original. Check whether these IDs come from different lists.",
+                _UNDERSTOOD, {f for p in people for f in p.files},
+            )
         self.pseudo.people = [p.to_dict() for p in self.people]
 
     def _place_new_records(self) -> None:
@@ -380,7 +436,7 @@ class Registry:
         for record in self.records.values():
             owner = self._record_owner.get(record.identity)
             if owner is not None:
-                for spelling in record.spellings:
+                for spelling in sorted(record.spellings):  # the same codes in every run
                     self.pseudo.form_of(owner.token, spelling, self.form_for(owner, spelling))
 
     def established_words(self) -> set[str]:
@@ -399,22 +455,47 @@ class Registry:
                     words.update(text.split())
         return words
 
+    def _ask(self, question_id: str, kind: str, text: str, options, files, payload=None) -> Question:
+        question = self.questions.get(question_id)
+        if question is None:
+            question = self.questions[question_id] = Question(question_id, kind, text, options, set(files), payload)
+        question.files |= set(files)
+        return question
+
+    def _describe(self, person: Person) -> str:
+        details = []
+        if person.births:
+            details.append("born " + ", ".join(b.raw for b in person.births))
+        if person.ids:
+            details.append("ID " + ", ".join(sorted(value for _, value in person.ids)))
+        return f"{person.canonical}" + (f" ({'; '.join(details)})" if details else "")
+
     def _new_person(self, record: Record) -> Person:
         person = Person(self.pseudo.new_person(record.canonical), record.key, record.canonical)
         person.absorb(record)
         self.people.append(person)
         self._by_token[person.token] = person
+        self._by_ref[record.identity] = person
+        self._ref_of[person.token] = record.identity
         self._by_key.setdefault(record.key, []).append(person)
         return person
 
     def _place(self, record: Record) -> None:
+        if record.identity in self.decisions.records:
+            target = self._by_ref.get(self.decisions.records[record.identity])
+            if target is None:
+                target = self._new_person(record)
+            else:
+                target.absorb(record)
+            self._record_owner[record.identity] = target
+            return
         same_name = self._by_key.get(record.key, [])
         fitting = [p for p in same_name if not p.conflicts_with(record)]
         sharing = [p for p in fitting if p.shares_evidence_with(record)]
         chosen: Person | None = None
         if len(sharing) == 1:
             chosen = sharing[0]
-        elif not sharing and len(fitting) == 1 and self.link_by_name:
+        elif not sharing and len(fitting) == 1 and (self.link_by_name or record.key in self.decisions.names_same):
             chosen = fitting[0]  # the user said an identical name is the same person
         if chosen is None:
             chosen = self._new_person(record)
@@ -424,16 +505,39 @@ class Registry:
                     f"{chosen.token}: not enough information to tell which of "
                     f"{', '.join(p.token for p in fitting)} this is, so it was kept apart."
                 )
-            elif len(fitting) == 1:
+                candidates = [self._ref_of[p.token] for p in fitting]
+                self._ask(
+                    f"which|{record.identity}", "which",
+                    f"\u201c{record.canonical}\u201d appears without a birth date or ID. Which person is this?",
+                    [*((str(i), self._describe(p)) for i, p in enumerate(fitting)), ("apart", "Someone else, keep apart")],
+                    record.files, (record.identity, candidates),
+                )
+            elif len(fitting) == 1 and record.key not in self.decisions.names_apart:
                 self.review.append(
                     f"{chosen.token} may be {fitting[0].token}: same name, but no birth date or ID confirms it, "
                     "so they were kept apart."
+                )
+                question = self._ask(
+                    f"same_name|{record.key}", "same_name", "",
+                    [("same", "One person"), ("apart", "Different people, keep apart")],
+                    {*record.files, *fitting[0].files}, record.key,
+                )
+                question.count = question.count + 1 if question.count else 2
+                question.text = (
+                    f"\u201c{record.canonical}\u201d appears {question.count} times, and no birth date or ID confirms "
+                    "that this is one person."
                 )
         else:
             read_two_ways = [b for b in (record.birth, *chosen.births) if b and len(b.dates) > 1]
             if read_two_ways:
                 self.review.append(
                     f"{chosen.token}: a birth date could be read two ways (day/month), and one reading matched."
+                )
+                self._ask(
+                    f"two_ways|{record.identity}", "info",
+                    f"{chosen.canonical}: a birth date could be read two ways (day/month), and one reading matched. "
+                    "They were linked as one person.",
+                    _UNDERSTOOD, record.files,
                 )
             chosen.absorb(record)
         self._record_owner[record.identity] = chosen
@@ -448,6 +552,13 @@ class Registry:
                 self.review.append(
                     f"{person.token} and {other.token} have the same name and birth date but different "
                     "patient IDs. They were kept apart: please check whether this is one person."
+                )
+                self._ask(
+                    f"same_birth|{record.identity}", "same_birth",
+                    f"{self._describe(person)} and {self._describe(other)} have the same name and birth date but "
+                    "different patient IDs. Is this one person?",
+                    [("same", "One person"), ("apart", "Different people, keep apart")],
+                    {*record.files, *other.files}, (record.identity, self._ref_of[other.token]),
                 )
 
     # -- looking up ----------------------------------------------------------
@@ -482,6 +593,18 @@ class Registry:
             return people[0]  # the same full name in the document it was found in
         return None
 
+    def _may_be(self, text: str, file: str, candidate: Person, note: str) -> tuple[Person | None, str | None]:
+        """A name that may refer to someone. The user's answer settles it, otherwise it stays apart and is asked."""
+        key = (file, name_key(text))
+        if key in self.decisions.mentions:
+            return (candidate if self.decisions.mentions[key] else None), None
+        self._ask(
+            f"mention|{key}", "mention",
+            f"In {file}, \u201c{' '.join(text.split())}\u201d may be {self._describe(candidate)}. Is it the same person?",
+            [("yes", "Same person"), ("no", "Someone else, keep apart")], {file}, key,
+        )
+        return None, note
+
     def person_for_mention(
         self,
         text: str,
@@ -500,23 +623,25 @@ class Registry:
             if person is None and (part_of := self._surname_of_someone_here(text, file)) is not None:
                 if self.link_by_name:
                     return part_of, None
-                return None, f"a surname here may belong to {part_of.token}: kept apart, please check."
+                return self._may_be(text, file, part_of, f"a surname here may belong to {part_of.token}: kept apart, please check.")
             if person is None:
                 count = len(self._by_key.get(name_key(text), []))
                 if count > 1:
                     return None, f"a name here fits {count} different people, so it was kept apart from them."
                 if count == 1:
-                    return None, f"a name here may be {self._by_key[name_key(text)][0].token}: same name, but nothing "\
-                                 "confirms it, so it was kept apart."
+                    other = self._by_key[name_key(text)][0]
+                    return self._may_be(
+                        text, file, other, f"a name here may be {other.token}: same name, but nothing confirms it, so it was kept apart."
+                    )
                 return None, None
             return person, None
         if row_person is not None and self._part_fits(parts[0], row_person):
             if self.link_by_name:
                 return row_person, None
-            return None, f"a name in a note may refer to {row_person.token}: kept apart, please check."
+            return self._may_be(text, file, row_person, f"a name in a note may refer to {row_person.token}: kept apart, please check.")
         candidate = self._match_single_name(parts[0], file, gender)
         if candidate is not None and not self.link_by_name:
-            return None, f"a surname here may belong to {candidate.token}: kept apart, please check."
+            return self._may_be(text, file, candidate, f"a surname here may belong to {candidate.token}: kept apart, please check.")
         return candidate, None
 
     def _surname_of_someone_here(self, text: str, file: str) -> Person | None:

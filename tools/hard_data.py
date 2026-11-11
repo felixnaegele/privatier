@@ -394,7 +394,7 @@ def run(use_ai: bool, keep: Path | None = None) -> dict:
     work = Path(tempfile.mkdtemp(prefix="hard_"))
     source = make(work / "Studie")
     summary = anonymize_folder(source, PASSWORD, use_ai=use_ai)
-    out = work / "Studie_anonymized"
+    out = work / "Studie_pseudonymised"
     texts = all_text(out)
 
     leaks = {

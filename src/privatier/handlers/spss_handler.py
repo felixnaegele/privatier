@@ -32,6 +32,18 @@ class SpssHandler(SameNameMixin):
         new_rows = [t.row(columns, list(values)) for values in df.itertuples(index=False, name=None)]
         for i, col in enumerate(names):
             changed = pd.Series([row[i] for row in new_rows], index=df.index, dtype=object)
+            if t.reduced_column(i) or t.blanks_in_column(i):
+                if t.reduced_column(i):
+                    # This column lost detail: dates may now be years or text, and its old format no longer applies.
+                    value_labels.pop(col, None)
+                    missing_ranges.pop(col, None)
+                    formats.pop(col, None)
+                if changed.map(lambda v: isinstance(v, str)).any():
+                    changed = changed.map(lambda v: "" if v is None or v != v else str(v))
+                else:
+                    changed = pd.to_numeric(changed, errors="coerce")
+                df[col] = changed
+                continue
             if columns[i].category is None:
                 if changed.map(lambda v: isinstance(v, str)).any() or df[col].dtype == object:
                     df[col] = changed

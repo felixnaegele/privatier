@@ -5,11 +5,13 @@ from collections import Counter
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.styles.numbers import is_date_format
 from openpyxl.utils import get_column_letter
+from openpyxl.utils.datetime import from_excel
 from openpyxl.cell.cell import MergedCell
 from openpyxl.worksheet.formula import ArrayFormula, DataTableFormula
 
-from ..transform import Transformer
+from ..transform import KEEP_FORMULA, Transformer
 from .base import SameNameMixin
 from .excel_formulas import column_of, read_exact_numbers, read_stored_results, unsafe_columns, write_stored_results
 
@@ -49,7 +51,8 @@ def _formula(value: str, t: Transformer) -> str:
 
 def _store(cell, new) -> None:
     if new != cell.value:
-        if cell.is_date and not hasattr(new, "year"):
+        # Also for a formula cell, which does not count as a date yet: 2015 must not show as a date in 1905.
+        if (cell.is_date or is_date_format(cell.number_format)) and not hasattr(new, "year"):
             cell.number_format = "General"  # e.g. birth date reduced to a year
         cell.value = new
 
@@ -141,6 +144,20 @@ def _safe_results(stored, titles, formulas, sensitive, t: Transformer) -> list[d
     return results
 
 
+def _stored_value(cell, stored: dict):
+    """The result a formula last had, as the kind of value it shows."""
+    kind, text = stored.get(cell.coordinate, (None, None))
+    if text is None or kind == "e":
+        return None
+    if kind == "str":
+        return text
+    try:
+        number = float(text)
+    except ValueError:
+        return text
+    return from_excel(number) if cell.is_date else number
+
+
 class ExcelHandler(SameNameMixin):
     name = "excel"
     extensions = (".xlsx", ".xlsm")
@@ -161,6 +178,16 @@ class ExcelHandler(SameNameMixin):
                     t.column(cell.value) if isinstance(cell.value, str) else t.column(None)
                     for cell in ws[header_row]
                 ]
+            elif t.table_without_header():
+                # Nothing tells what these columns hold, so nothing can be checked: the sheet stays, empty.
+                count = 0
+                for row in ws.iter_rows():
+                    for cell in row:
+                        if not isinstance(cell, MergedCell) and cell.value is not None:
+                            cell.value = None
+                            count += 1
+                if count:
+                    t.note_removed("cell in a sheet without a header row", count)
             sensitive[original_title] = {
                 ws.min_column + i for i, column in enumerate(columns) if t.identifies(i, column)
             }
@@ -168,6 +195,8 @@ class ExcelHandler(SameNameMixin):
             for row in ws.iter_rows():
                 cells = [c for c in row if not isinstance(c, MergedCell)]
                 for cell in cells:
+                    if cell.comment is not None and not t.keeps_comments:
+                        cell.comment = None
                     if cell.comment is not None:
                         cell.comment.text = t.text(cell.comment.text)
                         cell.comment.author = ""
@@ -178,11 +207,14 @@ class ExcelHandler(SameNameMixin):
                         elif isinstance(cell.value, str):
                             cell.value = _formula(cell.value, t)
                 if header_row and row[0].row > header_row:
-                    self._data_row(row, columns, t)
+                    self._data_row(row, columns, t, stored[titles.index(original_title)])
                     continue
                 for cell in cells:
                     value = cell.value
-                    if value is None or _is_formula(value) or not isinstance(value, str):
+                    if value is None or _is_formula(value):
+                        continue
+                    if not isinstance(value, str):
+                        _store(cell, t.outside_the_rows(value))
                         continue
                     _store(cell, t.header(value) if row[0].row == header_row else t.text(value))
             _page_margins(ws, t)
@@ -203,9 +235,13 @@ class ExcelHandler(SameNameMixin):
             write_stored_results(dst, results, read_exact_numbers(src))
 
     @staticmethod
-    def _data_row(row, columns, t: Transformer) -> None:
+    def _data_row(row, columns, t: Transformer, stored: dict) -> None:
         # Formulas and merged cells stay out of the row's values, they were handled above.
         values = [None if isinstance(c, MergedCell) or _is_formula(c.value) else c.value for c in row]
-        for cell, original, new in zip(row, values, t.row(columns, values)):
+        for i, (cell, original, new) in enumerate(zip(row, values, t.row(columns, values))):
             if original is not None and not isinstance(cell, MergedCell):
                 _store(cell, new)
+            elif not isinstance(cell, MergedCell) and _is_formula(cell.value):
+                replacement = t.formula_replacement(i, _stored_value(cell, stored))
+                if replacement is not KEEP_FORMULA:
+                    _store(cell, replacement)

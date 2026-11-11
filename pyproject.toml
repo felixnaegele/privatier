@@ -23,12 +23,20 @@ dependencies = [
 # Local AI name recognition (GLiNER). Large download (PyTorch); recommended on Apple Silicon / modern laptops.
 ai = ["gliner>=0.2.13", "protobuf>=4"]
 dev = ["pytest>=8", "reportlab>=4"]
+# The desktop window.
+app = ["pywebview>=5.3"]
+# Building Privatier.app and the dmg (see packaging/).
+build = ["pyinstaller>=6.22", "dmgbuild>=1.6", "pillow>=10"]
 
 [project.scripts]
 privatier = "privatier.cli:main"
+privatier-app = "privatier.app.window:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"privatier.app" = ["ui.html"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

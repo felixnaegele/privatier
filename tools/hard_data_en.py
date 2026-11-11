@@ -56,7 +56,7 @@ for name, score in [("Grace White", 1), ("Grace White", 2), ("Tom Reed", 3), ("T
 wb.save(src / "baseline.xlsx")
 
 summary = anonymize_folder(src, "english password", use_ai=use_ai)
-out = work / "Trial_anonymized"
+out = work / "Trial_pseudonymised"
 
 rows = list(csv.reader(io.StringIO((out / "enrolment.csv").read_text(encoding="utf-8-sig"))))
 result = load_workbook(out / "baseline.xlsx")

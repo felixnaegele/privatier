@@ -66,7 +66,7 @@ def main() -> None:
         unchanged.append(heading[:3] + ["Times", "Text"])
         counts = [0, 0]
         for path in sorted(source.rglob("*")):
-            output = work / "data_anonymized" / path.relative_to(source)
+            output = work / "data_pseudonymised" / path.relative_to(source)
             if not path.is_file() or not output.exists():
                 continue
             after = cells(output)

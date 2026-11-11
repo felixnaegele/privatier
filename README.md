@@ -2,10 +2,78 @@
 
 **Work with ChatGPT or Claude on sensitive research data, without the sensitive data ever leaving your computer.**
 
-Privatier makes an anonymised copy of a project folder on your own laptop. Names, birth dates, patient IDs,
+Privatier makes a protected copy of a project folder on your own laptop. Names, birth dates, patient IDs,
 addresses, phone numbers and similar details are replaced by consistent codes (`PERSON_0001`, `ID_0003`, …),
-like subject IDs in a clinical trial. You work with the anonymised copy in any AI tool. Afterwards Privatier
-can put the real values back into the AI's results, using an encrypted key file that never leaves your computer.
+like subject IDs in a clinical trial. You work with the copy in any AI tool. Afterwards Privatier can put the
+real values back into the AI's results, using an encrypted key file that never leaves your computer.
+
+## The desktop app (Mac)
+
+Open `Privatier-<version>-arm64.dmg`, drag Privatier onto the Applications folder, and open it from there. It needs a
+Mac with an Apple chip (M1 or newer) and macOS 14 or newer. The local AI is part of the app, so it never needs the
+internet. The app is not signed by Apple yet: the first start has to be allowed once in System Settings, Privacy &
+Security ("Open Anyway"). The dmg contains a short note with the steps.
+
+**Protect:** drop a folder, or one or more files, on the window. Privatier reads them and shows what it found. Press
+"Make the copy" and choose a password for the key. Everything else is optional:
+
+- **Questions** about unclear cases, one at a time. They can be skipped: what is unclear stays apart.
+- **Protection level**, with the effect of each level shown before anything is written.
+- **What was found:** every value that will be replaced. Switch one off to keep it as written (the name of a method
+  or a hospital you need), or add a word or name that was missed. Values from identifying columns cannot be switched
+  off: those columns are always replaced as a whole. Added words get codes like `TERM_0001`.
+- **What loses detail** at the chosen level, and columns to add to the check.
+
+**Restore:** choose the results the AI gave you, the key file and its password. A restored copy is written next to
+the results.
+
+A single file `Studie.xlsx` gives `Studie_pseudonymised/Studie.xlsx` and `Studie_privatier/` next to it. Only the
+chosen files are read: other files in the folder are not used, not even to tell people apart.
+
+From the source code, the app starts with `Privatier.command` or `.venv/bin/python -m privatier.app`.
+
+## Privacy levels
+
+| | **1. Pseudonymised** (default) | **2. Less detail** | **3. Strongly reduced** | **4. Anonymisation attempt** |
+|---|---|---|---|---|
+| Names and IDs | Codes | Codes | Random codes | Random codes |
+| Key | Kept, reversible | Kept, reversible | None | None |
+| Dates | Exact | Month and year | Year | Removed |
+| Age | Exact | **Exact** | 10-year bands, 90+ together | 10-year bands, 90+ together |
+| Birth date | Year (full date in key) | Year (full date in key) | Decade of birth | Decade of birth |
+| Free-text columns | Names replaced | Names replaced | Emptied | Emptied |
+| Letters (Word, PDF, text) | Names replaced | Names replaced | Left out and listed | Left out and listed |
+| Patients who still stand out | Unchanged | Unchanged | Unchanged | Details blanked, and counted |
+
+On the command line: `privatier anonymize Studie --level 4`.
+
+Before anything is written, the app shows for each level how many patients can still be singled out, and which
+columns lose detail. A date that can be read two ways (`03/04/2015`) keeps only its year at level 2. A column judged
+to be free text can be kept by ticking it, but the word "anonymous" is then not used.
+
+### When the word "anonymous" is used
+
+Only at level 4, only after checking the files as written, and only if all of this holds:
+
+- Every patient shares sex, age and every date column with at least 4 others (groups of 5), in every table, and
+  also when tables are joined by patient code.
+- Every table could be checked. "Could not check" never counts as safe.
+- No free text, no letters and no key remain, and no macros stay unchecked.
+- No file or folder name contains a name or value from the data. File names are never changed, so this blocks the label.
+
+Otherwise the result is "Reduced detail, not anonymous", with the reasons. Even when it passes:
+
+- **Other clinical columns are not compared** unless you tick them, as nearly everyone would look unique otherwise.
+  Someone who knows a rare value could still recognise a patient.
+- **Row order is unchanged**, so a table sorted by date or name can give hints.
+- A number written inside a formula is not looked at.
+- **The legal decision is not Privatier's:** ask your data protection officer whether this counts as anonymous.
+
+Levels 3 and 4 lose exact intervals, so survival analysis will not work on those copies. Level 2 allows only rough
+intervals, in months. Each run writes `privacy_report.txt` (counts and column names only) next to the audit log.
+
+`tools/check_uniqueness.py <folder>` prints the same check for any folder. It reads Excel, SPSS and CSV, counts
+patients rather than rows when a patient column exists, and says so when it can only count rows.
 
 > Status: early prototype (v0.1). Test it with fake data first. Automatic detection is never perfect: always
 > look through the anonymised copy before you upload it.
@@ -14,12 +82,12 @@ can put the real values back into the AI's results, using an encrypted key file 
 
 ```
 Studie/                  your original folder (never changed)
-Studie_anonymized/       safe copy → work with this in ChatGPT / Claude
+Studie_pseudonymised/    the copy at level 1 → work with this in ChatGPT / Claude
 Studie_privatier/        KEEP PRIVATE: key.vault (encrypted) + audit.jsonl
 ```
 
 1. **Anonymise:** `privatier anonymize Studie`
-2. Upload files from `Studie_anonymized/` to the AI and do your analysis.
+2. Upload files from `Studie_pseudonymised/` to the AI and do your analysis.
 3. **Restore (optional):** save the AI's results in a folder, then
    `privatier restore Ergebnisse --key Studie_privatier/key.vault` → `Ergebnisse_restored/`
 
@@ -57,8 +125,8 @@ Detection works in layers:
 
 ### Tables first: what happens to each column
 
-Tables should work with as little input from you as possible. Every cell in a column that does not identify
-anyone comes out exactly as it went in.
+Tables should work with as little input from you as possible. At level 1, every cell in a column that does not
+identify anyone comes out exactly as it went in. This table describes level 1.
 
 | Column | What happens |
 |---|---|
@@ -151,8 +219,7 @@ privatier anonymize sample_project
 - Free-standing names in text without a title ("Schmidt kam zur Kontrolle") are only found by the local AI
   layer or if the name already appeared elsewhere in the project.
 - Two different people with the same name and birth date and no ID cannot be told apart, and count as one person.
-- Questions can only be answered with `--link-by-name` so far. Answering them one by one is planned for the review
-  screen, and flagged people cannot be merged or split by hand yet.
+- On the command line, questions can only be answered with `--link-by-name`. The app answers them one by one.
 - Without the local AI, names and places with no hint around them are missed. In testing on hard data this was
   up to 5 of 39 values, so **use `--ai` for real data**.
 - A surname that is also an ordinary word (`Klein`, `Mai`) is replaced wherever it appears capitalised, even
@@ -162,17 +229,40 @@ privatier anonymize sample_project
 - Dates other than birth dates in spreadsheet columns (surgery, follow-up…) are kept with day and month on purpose. Exact dates can help identify someone, so consider this before you share the data.
 - Old Excel `.xls`, scanned PDFs (OCR) and images are not supported yet.
 - PDFs become text files; rewriting the PDF itself is planned.
-- No graphical app yet: drag-and-drop for Mac/Windows is the next step.
+- The app is English only and runs on Macs with an Apple chip. It is not signed by Apple yet, so the first start must be allowed once.
+- A postcode on its own (`28203`) is not recognised as identifying.
 
 ## Roadmap
 
 - [x] Core engine: Excel, CSV, SPSS, Word, PDF, text; key file; audit log; restore
-- [ ] Test the local AI layer (GLiNER) on a Mac with German and English documents
-- [ ] Drag-and-drop desktop app (Mac, Windows)
-- [ ] Review screen: see and correct every detection before export
+- [x] Local AI layer (GLiNER) tested on German and English data, and built into the app
+- [x] Drag-and-drop desktop app (Mac)
+- [x] Review screen: answer questions one by one before export
+- [x] Privacy levels, with the effect shown before export
+- [ ] Desktop app on Windows
 - [ ] Optional date shifting for clinical dates
 - [ ] Add-ons: OCR for scanned PDFs, `.xls`, PowerPoint, optional local LLM double-check
-- [ ] Installer for colleagues
+- [x] Installer for colleagues (dmg, drag to Applications)
+- [x] Review list: keep a value, add a missed word; single files; restore in the app
+- [ ] Clean-install test on a second Mac
+- [ ] Paste mode: protect and restore a piece of text through the clipboard, without files
+- [ ] Key password in the Mac keychain (Touch ID); remember answers per project
+- [ ] Before and after view per file
+- [ ] German interface
+- [ ] Signing by Apple, so the first start needs no extra step
+
+## Build the app
+
+```bash
+.venv/bin/python -m pip install -e ".[app,ai,build]"
+privatier setup-ai                      # the model must be on this Mac: it is copied into the app
+sh packaging/build_app.sh               # dist/Privatier.app, a self-test, then dist/Privatier-<version>-arm64.dmg
+```
+
+`--app-only` and `--dmg-only` run one half. The build takes about 6 minutes and the app is about 1.8 GB, most of it
+the AI. `dist/Privatier.app/Contents/MacOS/Privatier --self-test` checks a finished app without opening a window: it
+makes mock files, protects them with the AI, and restores them. `tools/ui_demo.py` shows the screen in a browser
+with made-up data.
 
 ## For developers
 
@@ -186,8 +276,13 @@ src/privatier/
   pseudonyms.py consistent codes, known-value propagation
   vault.py      encrypted key file
   audit.py      audit log
+  privacy.py    the four levels, what each does to a value
+  review.py     what was found, and what the user decided about it (keep a value, add a word)
+  uniqueness.py who can be singled out, what each level would change, when "anonymous" may be said
+  app/          the desktop app: service.py (logic), window.py (the window), ui.html (the screen), selftest.py
   engine.py     folder processing, network blocking
   cli.py        command line
+packaging/      builds Privatier.app and the dmg
 tests/          run with: pytest
 tools/          hard_data*.py: messy German and English test data with answer keys; add --ai to use the local model
                 compare_stats.py: proves an analysis gives the same answer before and after, on your own folder

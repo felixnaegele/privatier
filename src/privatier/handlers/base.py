@@ -6,6 +6,10 @@ from typing import Protocol
 from ..transform import Transformer
 
 
+class LeftOut(Exception):
+    """This file cannot be checked at the chosen privacy level, so it does not go into the copy."""
+
+
 class Handler(Protocol):
     name: str
     extensions: tuple[str, ...]

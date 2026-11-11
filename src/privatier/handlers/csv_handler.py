@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ..tables import classify_header
 from ..transform import Transformer
+from .base import LeftOut
 from .base import SameNameMixin
 from .text_handler import read_text
 
@@ -60,6 +61,8 @@ class CsvHandler(SameNameMixin):
         t.begin_table("")
         header_at = _find_header_row(rows)
         out_rows = []
+        if header_at is None and t.table_without_header():
+            raise LeftOut("no header row, so its columns cannot be checked")
         if header_at is None:  # no recognisable header: every cell is treated as free text
             out_rows = [[t.text(v) for v in row] for row in rows]
         else:

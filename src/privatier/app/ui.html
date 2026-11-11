@@ -1,0 +1,1576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privatier</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f5f5f7; --card: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --faint: #8e8e93;
+    --line: rgba(60, 60, 67, .14); --line-strong: rgba(60, 60, 67, .26);
+    --fill: rgba(118, 118, 128, .12); --fill-strong: rgba(118, 118, 128, .2); --field: #ffffff;
+    --accent: #007aff; --accent-press: #0068d9; --accent-text: #ffffff; --accent-soft: rgba(0, 122, 255, .1); --accent-line: rgba(0, 122, 255, .32); --ring: rgba(0, 122, 255, .4);
+    --good: #1d7a36; --warn: #9a5200; --bad: #c4201a;
+    --good-bg: rgba(52, 199, 89, .16); --warn-bg: rgba(255, 149, 0, .16); --bad-bg: rgba(255, 59, 48, .12);
+    --bar: rgba(245, 245, 247, .76); --thumb: #ffffff; --knob: #ffffff; --switch-off: rgba(120, 120, 128, .28);
+    --button: #ffffff; --button-press: #f0f0f2; --dim: rgba(0, 0, 0, .28); --over: rgba(236, 244, 255, .9);
+    --shadow: 0 0 0 .5px rgba(0, 0, 0, .08), 0 1px 2px rgba(0, 0, 0, .04), 0 6px 20px rgba(0, 0, 0, .05);
+    --shadow-small: 0 0 0 .5px rgba(0, 0, 0, .12), 0 1px 1.5px rgba(0, 0, 0, .1);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1e; --card: #2a2a2d; --text: #f5f5f7; --muted: #a1a1a6; --faint: #7c7c82;
+      --line: rgba(255, 255, 255, .1); --line-strong: rgba(255, 255, 255, .2);
+      --fill: rgba(118, 118, 128, .24); --fill-strong: rgba(118, 118, 128, .36); --field: rgba(255, 255, 255, .06);
+      --accent: #0a84ff; --accent-press: #3a9bff; --accent-text: #ffffff; --accent-soft: rgba(10, 132, 255, .18); --accent-line: rgba(10, 132, 255, .45); --ring: rgba(10, 132, 255, .5);
+      --good: #4cd964; --warn: #ffb340; --bad: #ff6961;
+      --good-bg: rgba(48, 209, 88, .18); --warn-bg: rgba(255, 159, 10, .18); --bad-bg: rgba(255, 69, 58, .18);
+      --bar: rgba(28, 28, 30, .72); --thumb: #636366; --knob: #ffffff; --switch-off: rgba(120, 120, 128, .4);
+      --button: #48484b; --button-press: #58585c; --dim: rgba(0, 0, 0, .5); --over: rgba(18, 34, 58, .9);
+      --shadow: 0 0 0 .5px rgba(255, 255, 255, .1), 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
+      --shadow-small: 0 0 0 .5px rgba(255, 255, 255, .12), 0 1px 1.5px rgba(0, 0, 0, .4);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text);
+    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased; cursor: default;
+    -webkit-user-select: none; user-select: none; overflow-wrap: anywhere;
+  }
+  .sel, td, code, input { -webkit-user-select: text; user-select: text; }
+  .sel, td, code { cursor: text; }
+  .hidden { display: none !important; }
+  h1 { font-size: 24px; line-height: 1.2; font-weight: 700; letter-spacing: -.02em; margin: 0 0 4px; }
+  h2 { font-size: 16px; line-height: 1.3; font-weight: 600; letter-spacing: -.01em; margin: 0; }
+  p { margin: 0 0 8px; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12.5px; }
+  code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; word-break: break-all; }
+  :focus { outline: none; }
+  :focus-visible { outline: 3px solid var(--ring); outline-offset: 1px; }
+  .icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* ------------------------------------------------------------ top bar, bottom bar */
+  .bar {
+    position: sticky; top: 0; z-index: 10; height: 52px; padding: 0 20px; flex: none;
+    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+    background: var(--bar); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: .5px solid var(--line-strong);
+  }
+  .bar-name { font-size: 15px; font-weight: 600; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+  .bar-name .icon { width: 18px; height: 18px; color: var(--accent); }
+  .bar-side { text-align: right; font-size: 12px; color: var(--faint); }
+  main { flex: 1; width: 100%; max-width: 820px; margin: 0 auto; padding: 28px 24px 40px; }
+  main > section:not(.hidden) { animation: appear .22s ease-out; }
+  @keyframes appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .actionbar {
+    position: sticky; bottom: 0; z-index: 9; flex: none;
+    background: var(--bar); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+    border-top: .5px solid var(--line-strong);
+  }
+  .actionbar-in { max-width: 820px; margin: 0 auto; padding: 10px 24px; display: flex; align-items: center; gap: 16px; }
+  .actionbar .line { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); }
+
+  /* ------------------------------------------------------------ segmented control */
+  .seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 2px; border-radius: 9px; background: var(--fill); }
+  .seg-thumb {
+    position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px) / var(--n, 2));
+    transform: translateX(calc(var(--i, 0) * 100%)); border-radius: 7px; background: var(--thumb); box-shadow: var(--shadow-small);
+    transition: transform .2s ease;
+  }
+  .seg-item {
+    position: relative; z-index: 1; font: inherit; font-size: 13px; line-height: 1.25; color: var(--text); background: none; border: 0;
+    border-radius: 7px; padding: 5px 16px; min-height: 26px; cursor: default; transition: opacity .15s;
+  }
+  .seg-item.on { font-weight: 600; }
+  .seg-item:not(.on):hover { opacity: .65; }
+  .seg-item:disabled { opacity: .4; }
+  .seg-note { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+  #tabs .seg-item { min-width: 96px; }
+  #levels .seg-item { padding: 7px 6px; min-height: 44px; }
+
+  /* ------------------------------------------------------------ buttons and fields */
+  .btn {
+    font: inherit; font-size: 13px; color: var(--text); background: var(--button); border: 0; border-radius: 8px; padding: 5px 13px; min-height: 28px;
+    box-shadow: var(--shadow-small); cursor: default; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    transition: background-color .15s, opacity .15s, transform .15s;
+  }
+  .btn:hover { background: var(--button-press); }
+  .btn:active { transform: scale(.98); }
+  .btn.primary { background: var(--accent); color: var(--accent-text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
+  .btn.primary:hover, .btn.primary:active { background: var(--accent-press); }
+  .btn.large { font-size: 14px; padding: 8px 20px; min-height: 36px; border-radius: 10px; }
+  .btn.chosen { background: var(--accent); color: var(--accent-text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
+  .btn.plain { background: none; box-shadow: none; color: var(--accent); padding: 4px 6px; }
+  .btn.plain:hover { background: var(--fill); }
+  .btn:disabled { opacity: .45; pointer-events: none; }
+  input[type=password], input[type=text], input[type=search] {
+    font: inherit; font-size: 13px; color: var(--text); background: var(--field); border: 0; border-radius: 8px; padding: 6px 10px; min-height: 30px;
+    width: 260px; max-width: 100%; box-shadow: inset 0 0 0 1px var(--line-strong); -webkit-appearance: none; appearance: none;
+    transition: box-shadow .15s;
+  }
+  input[type=password]:focus, input[type=text]:focus, input[type=search]:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--ring); }
+  input::placeholder { color: var(--faint); }
+  input[type=search]::-webkit-search-decoration { -webkit-appearance: none; }
+  .search { position: relative; display: inline-block; max-width: 100%; }
+  .search .icon { position: absolute; left: 9px; top: 50%; margin-top: -7px; width: 14px; height: 14px; color: var(--faint); pointer-events: none; }
+  .search input { padding-left: 29px; }
+  input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+  .pw { position: relative; display: block; }
+  .pw input { width: 100%; min-height: 34px; padding-right: 38px; }
+  .eye { position: absolute; right: 4px; top: 50%; margin-top: -13px; width: 28px; height: 26px; border: 0; border-radius: 6px; background: none; color: var(--muted); display: grid; place-items: center; padding: 0; cursor: default; }
+  .eye:hover { background: var(--fill); color: var(--text); }
+
+  /* ------------------------------------------------------------ switch */
+  .switch { position: relative; display: inline-block; width: 38px; height: 22px; flex: none; }
+  .switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: default; z-index: 1; }
+  .switch .track { position: absolute; inset: 0; border-radius: 11px; background: var(--switch-off); transition: background-color .2s; }
+  .switch .track::after {
+    content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--knob);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 0 0 .5px rgba(0, 0, 0, .06); transition: transform .2s ease;
+  }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(16px); }
+  .switch input:focus-visible + .track { outline: 3px solid var(--ring); outline-offset: 1px; }
+  .switch input:disabled + .track { opacity: .45; }
+
+  /* ------------------------------------------------------------ cards */
+  .card { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); padding: 20px 22px; margin-bottom: 16px; }
+  .rule { border: 0; border-top: .5px solid var(--line-strong); margin: 16px 0; }
+  .message { padding: 10px 12px; border-radius: 10px; margin: 12px 0 0; font-size: 13px; -webkit-user-select: text; user-select: text; }
+  .message strong { display: block; font-weight: 600; }
+  .message.bad { background: var(--bad-bg); color: var(--bad); }
+  .message.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill { display: inline-block; padding: 3px 11px; border-radius: 99px; font-size: 12.5px; font-weight: 600; }
+  .pill.good { background: var(--good-bg); color: var(--good); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  ul.tight { margin: 8px 0 0; padding-left: 18px; }
+  ul.tight li { margin-bottom: 2px; -webkit-user-select: text; user-select: text; }
+  .row-end { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end; }
+  .spread { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .scroll { max-height: 280px; overflow: auto; padding-right: 12px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 12px 7px 0; border-bottom: .5px solid var(--line-strong); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  th { font-weight: 500; color: var(--muted); font-size: 12px; position: sticky; top: 0; background: var(--card); }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th:last-child, td:last-child { padding-right: 0; }
+
+  details > summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--accent); border-radius: 6px; padding: 2px 4px; margin-left: -4px; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before, .chevron {
+    content: ""; display: inline-block; width: 7px; height: 7px; border-right: 1.8px solid currentColor; border-bottom: 1.8px solid currentColor;
+    transform: rotate(-45deg); transition: transform .18s ease; flex: none; margin: 0 3px 0 1px;
+  }
+  details[open] > summary::before, .open > .chevron, .sect.open > .sect-head > .chevron { transform: rotate(45deg); }
+  details[open] > summary { margin-bottom: 10px; }
+
+  /* ------------------------------------------------------------ start and restore */
+  .hero { text-align: center; margin: 8px 0 22px; }
+  .hero p { max-width: 520px; margin: 0 auto; }
+  .drop { border: 1.5px dashed var(--line-strong); border-radius: 14px; padding: 44px 24px; text-align: center; background: var(--card); margin-bottom: 16px; }
+  .drop-icon { width: 52px; height: 52px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; margin: 0 auto 14px; }
+  .drop-icon .icon { width: 26px; height: 26px; }
+  .drop .big { font-size: 19px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 4px; }
+  .drop .buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 18px; }
+  .setting { display: flex; align-items: center; gap: 16px; }
+  .setting > div { flex: 1; min-width: 0; }
+  .setting strong { font-weight: 600; }
+  .assure { display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--muted); font-size: 12.5px; margin-top: 18px; }
+  .assure .icon { color: var(--good); }
+  .dropover {
+    position: fixed; inset: 0; z-index: 40; pointer-events: none; background: var(--over); opacity: 0; visibility: hidden;
+    transition: opacity .15s ease, visibility 0s .15s;
+  }
+  .dropover.on { opacity: 1; visibility: visible; transition-delay: 0s; }
+  .dropover-in { position: absolute; inset: 14px; border: 2.5px dashed var(--accent); border-radius: 18px; display: grid; place-content: center; justify-items: center; gap: 12px; color: var(--accent); font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
+  .dropover .icon { width: 44px; height: 44px; }
+
+  /* ------------------------------------------------------------ busy */
+  .busy-card { text-align: center; padding: 72px 20px; }
+  .spinner { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--fill-strong); border-top-color: var(--accent); animation: spin .9s linear infinite; margin: 0 auto 16px; }
+  .spinner.mini { width: 14px; height: 14px; border-width: 2px; margin: 0; flex: none; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes pulse { 50% { opacity: .35; } }
+  @keyframes swap { from { opacity: 0; } to { opacity: 1; } }
+  .swap { animation: swap .3s ease; }
+  #busy-text { font-size: 16px; font-weight: 600; -webkit-user-select: text; user-select: text; }
+  #busy-sub { min-height: 20px; margin-top: 2px; color: var(--muted); -webkit-user-select: text; user-select: text; }
+
+  /* ------------------------------------------------------------ review: summary and questions */
+  .lead { display: flex; align-items: center; gap: 14px; }
+  .lead-mark { width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
+  .lead-mark.good { background: var(--good-bg); color: var(--good); }
+  .lead-mark .icon { width: 22px; height: 22px; }
+  .lead h2 { font-size: 19px; letter-spacing: -.015em; }
+  .lead p { margin: 2px 0 0; color: var(--muted); -webkit-user-select: text; user-select: text; }
+  .type-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+  .tchip { font: inherit; font-size: 12.5px; color: var(--text); background: var(--fill); border: 0; border-radius: 99px; padding: 4px 11px; cursor: default; transition: background-color .15s; }
+  .tchip:hover { background: var(--fill-strong); }
+  .tchip span { color: var(--muted); margin-left: 5px; font-variant-numeric: tabular-nums; }
+  .quiet-line { display: flex; align-items: center; gap: 7px; margin-top: 14px; font-size: 13px; color: var(--muted); }
+  .quiet-line .icon { color: var(--good); }
+  .card.attention { background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--card); box-shadow: inset 0 0 0 1px var(--accent-line), var(--shadow); }
+  .q-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .q-where { margin: 14px 0 4px; }
+  .question-text { font-size: 15px; -webkit-user-select: text; user-select: text; }
+  .options { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
+  .nav { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .q-done { display: flex; align-items: center; gap: 9px; font-weight: 600; color: var(--good); }
+  .q-done .btn { margin-left: auto; font-weight: 400; }
+
+  /* ------------------------------------------------------------ review: sections that open */
+  .card.rows { padding: 0; overflow: hidden; }
+  .sect + .sect { border-top: .5px solid var(--line-strong); }
+  .sect-head { font: inherit; color: inherit; width: 100%; display: flex; align-items: center; gap: 12px; padding: 15px 22px; background: none; border: 0; text-align: left; cursor: default; transition: background-color .15s; }
+  .sect-head:hover { background: var(--fill); }
+  .sect-head:focus-visible, .group-head:focus-visible { outline-offset: -3px; }
+  .sect-title { font-size: 15px; font-weight: 600; white-space: nowrap; }
+  .sect-state { margin-left: auto; text-align: right; font-size: 13px; color: var(--muted); }
+  .sect-head .chevron { color: var(--faint); }
+  .sect-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .24s ease; }
+  .sect.open > .sect-body { grid-template-rows: 1fr; }
+  .sect-inner { overflow: hidden; min-height: 0; visibility: hidden; transition: visibility 0s .24s; }
+  .sect.open > .sect-body > .sect-inner { visibility: visible; transition-delay: 0s; }
+  .sect-pad { padding: 4px 22px 22px; }
+
+  .effect { display: grid; grid-template-columns: 190px 1fr; gap: 22px; align-items: start; margin-top: 16px; padding-top: 16px; border-top: .5px solid var(--line-strong); }
+  .number { font-size: 52px; font-weight: 700; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin-bottom: 6px; -webkit-user-select: text; user-select: text; }
+  .check-line { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; }
+  .check-line input { margin-top: 2px; flex: none; }
+
+  .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 12px 0 10px; }
+  .groups { border-radius: 10px; box-shadow: inset 0 0 0 .5px var(--line-strong); overflow: hidden; }
+  .group + .group { border-top: .5px solid var(--line-strong); }
+  .group-head { font: inherit; color: inherit; width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: none; border: 0; text-align: left; cursor: default; transition: background-color .15s; }
+  .group-head:hover { background: var(--fill); }
+  .group-head .chevron { color: var(--faint); }
+  .group-name { font-weight: 600; }
+  .group-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .group-kept { margin-left: auto; font-size: 12px; color: var(--warn); background: var(--warn-bg); padding: 1px 8px; border-radius: 99px; }
+  .group-body { border-top: .5px solid var(--line); padding: 2px 14px 6px 31px; }
+  .frow { display: grid; grid-template-columns: minmax(0, 1fr) 118px 46px 62px 158px; align-items: center; gap: 10px; min-height: 34px; border-bottom: .5px solid var(--line); }
+  .frow.last { border-bottom: 0; }
+  .fval { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .frow.kept .fval { color: var(--warn); }
+  .fsrc, .fcount { font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .fcount { text-align: right; font-variant-numeric: tabular-nums; }
+  .ffiles { font: inherit; font-size: 12px; color: var(--accent); background: none; border: 0; border-radius: 5px; padding: 2px 4px; text-align: right; white-space: nowrap; cursor: default; }
+  .ffiles:hover { background: var(--fill); }
+  .fact { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .fact .icon { width: 13px; height: 13px; color: var(--faint); }
+  .ffilelist { grid-column: 1 / -1; font-size: 12px; color: var(--muted); padding: 0 0 8px; -webkit-user-select: text; user-select: text; }
+  .more { margin: 6px 0 2px; }
+  .empty { padding: 14px; color: var(--muted); text-align: center; }
+  .add-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .chip { display: inline-flex; align-items: center; gap: 2px; background: var(--fill); border-radius: 99px; padding: 2px 3px 2px 11px; font-size: 13px; max-width: 100%; }
+  .chip span { -webkit-user-select: text; user-select: text; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip .chip-note { color: var(--muted); font-size: 12px; margin-left: 6px; -webkit-user-select: none; user-select: none; }
+  .chip button { width: 20px; height: 20px; border-radius: 50%; border: 0; background: none; color: var(--muted); display: grid; place-items: center; padding: 0; cursor: default; flex: none; }
+  .chip button:hover { background: var(--fill-strong); color: var(--text); }
+  .chip .icon { width: 10px; height: 10px; stroke-width: 2.4; }
+
+  /* ------------------------------------------------------------ the sheet */
+  .sheet-wrap { position: fixed; inset: 0; z-index: 30; background: var(--dim); display: flex; justify-content: center; align-items: flex-start; padding-top: 52px; animation: swap .2s ease-out; }
+  .sheet {
+    width: 440px; max-width: calc(100% - 32px); max-height: calc(100vh - 72px); overflow: auto; background: var(--card); border-radius: 0 0 14px 14px;
+    box-shadow: 0 0 0 .5px var(--line-strong), 0 22px 60px rgba(0, 0, 0, .35); padding: 22px 24px 20px; animation: sheet-in .26s cubic-bezier(.2, .8, .2, 1);
+  }
+  @keyframes sheet-in { from { transform: translateY(-28px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .sheet h2 { font-size: 17px; margin-bottom: 6px; }
+  .sheet .fields { display: grid; gap: 10px; margin-top: 14px; }
+
+  /* ------------------------------------------------------------ done and restored */
+  .done-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
+  .done-head h1 { margin: 0; font-size: 22px; }
+  .next-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 20px 0 8px; }
+  ol.next { list-style: none; margin: 0; padding: 0; counter-reset: next; }
+  ol.next li { counter-increment: next; display: flex; gap: 12px; align-items: baseline; padding: 5px 0; -webkit-user-select: text; user-select: text; }
+  ol.next li::before { content: counter(next); width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; display: grid; place-items: center; flex: none; }
+  .paths { border-radius: 10px; background: var(--fill); padding: 4px 14px; margin-top: 14px; }
+  .path-row { padding: 9px 0; }
+  .path-row + .path-row { border-top: .5px solid var(--line-strong); }
+  .path-row .what { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
+  .stat { background: var(--fill); border-radius: 10px; padding: 12px 14px; }
+  .stat .value { font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; -webkit-user-select: text; user-select: text; }
+  .stat .what { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .form-row { display: grid; grid-template-columns: 22px 120px minmax(0, 1fr); gap: 12px; align-items: center; padding: 16px 0; border-top: .5px solid var(--line-strong); }
+  .form-row:first-of-type { border-top: 0; padding-top: 0; }
+  .form-row .name { font-weight: 600; }
+  .form-row .value { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .form-row .value > .grow { flex: 1; min-width: 0; }
+  .dot { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-strong); display: grid; place-items: center; color: transparent; transition: background-color .2s, color .2s, box-shadow .2s; }
+  .dot .icon { width: 13px; height: 13px; stroke-width: 2.6; }
+  .dot.ok { background: var(--good-bg); color: var(--good); box-shadow: none; }
+  .chosen-item { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .chosen-item .icon { width: 20px; height: 20px; color: var(--accent); }
+  .chosen-item strong { font-weight: 600; -webkit-user-select: text; user-select: text; }
+  #restore-drop { padding: 26px 24px; margin-bottom: 0; background: none; }
+
+  @media (max-width: 820px) {
+    main { padding: 22px 20px 32px; }
+    .actionbar-in { padding: 10px 20px; }
+    .effect { grid-template-columns: 160px 1fr; gap: 16px; }
+    .frow { grid-template-columns: minmax(0, 1fr) 42px 58px 172px; }
+    .fsrc { display: none; }
+    .seg-item { padding-left: 10px; padding-right: 10px; }
+    #levels .seg-item { font-size: 12.5px; }
+    .form-row { grid-template-columns: 22px 96px minmax(0, 1fr); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; transition-delay: 0s !important; }
+    .spinner { animation: pulse 1.6s ease-in-out infinite !important; animation-duration: 1.6s !important; }
+  }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M9 12l2.2 2.2L15 10.5"/></symbol>
+  <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3v11m0 0l-4-4m4 4l4-4"/><path d="M5 16v2.5A2.5 2.5 0 007.5 21h9a2.5 2.5 0 002.5-2.5V16"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 018 0v3"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7.5A2.5 2.5 0 015.5 5h3.6l2 2.2h7.4A2.5 2.5 0 0121 9.7v7.8a2.5 2.5 0 01-2.500 2.500h-13A2.500 2.500 0 013 17.500v-10z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 107.5-7.5H6.5"/><path d="M9.5 1.5l-3 3 3 3"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/></symbol>
+</svg>
+
+<header class="bar" id="topbar">
+  <div class="bar-name"><svg class="icon"><use href="#i-shield"/></svg>Privatier</div>
+  <div class="seg" id="tabs" role="tablist" aria-label="What to do"></div>
+  <div class="bar-side sel" id="version"></div>
+</header>
+
+<main id="main">
+
+  <!-- Protect: choose what to protect -->
+  <section id="start">
+    <div class="hero">
+      <h1>Make a protected copy</h1>
+      <p class="muted">Names, birth dates, IDs and similar details are replaced by codes, so you can work on the copy with an AI tool.</p>
+    </div>
+    <div class="drop" id="drop">
+      <div class="drop-icon"><svg class="icon"><use href="#i-drop"/></svg></div>
+      <div class="big">Drop a folder or files here</div>
+      <div class="muted">Excel, SPSS, CSV, Word, PDF and text files</div>
+      <div class="buttons">
+        <button class="btn primary large" id="choose-folder" type="button" title="Command-O">Choose a folder</button>
+        <button class="btn large" id="choose-files" type="button">Choose files</button>
+      </div>
+    </div>
+    <div id="start-error" class="message bad hidden" role="alert" style="margin: 0 0 16px"></div>
+    <div class="card setting">
+      <div>
+        <strong id="ai-title">Use the local AI to find names in free text</strong> <span class="muted" id="ai-recommended">(recommended)</span>
+        <div class="muted small sel" id="ai-note" style="margin-top:2px">It runs on this computer. Without it, names with no hint around them can be missed.</div>
+      </div>
+      <label class="switch"><input type="checkbox" role="switch" id="ai" aria-labelledby="ai-title" aria-describedby="ai-note"><span class="track"></span></label>
+    </div>
+    <div class="assure"><svg class="icon"><use href="#i-lock"/></svg>Nothing leaves this computer, and your original files are never changed.</div>
+  </section>
+
+  <!-- Waiting -->
+  <section id="busy" class="hidden" aria-live="polite">
+    <div class="card busy-card">
+      <div class="spinner"></div>
+      <div id="busy-text">Reading your files</div>
+      <div id="busy-sub" class="small"></div>
+      <p class="muted small" style="margin:10px 0 0">Network access is blocked while your data is being read.</p>
+    </div>
+  </section>
+
+  <!-- Protect: glance, answer if asked, make the copy -->
+  <section id="review" class="hidden">
+    <div class="spread" style="margin-bottom:18px">
+      <div style="min-width:0"><h1 class="sel" id="folder-name"></h1><div class="muted small" id="folder-facts"></div></div>
+      <button class="btn" id="restart" type="button" style="flex:none"></button>
+    </div>
+
+    <div class="card">
+      <div class="lead">
+        <div class="lead-mark"><svg class="icon"><use href="#i-shield"/></svg></div>
+        <div><h2>Ready to make a protected copy</h2><p id="summary-line"></p></div>
+      </div>
+      <div class="type-chips" id="type-chips" aria-label="What was found, by kind"></div>
+      <div class="quiet-line hidden" id="summary-quiet"><svg class="icon"><use href="#i-check"/></svg>Nothing to ask: the data settles who is who.</div>
+      <div id="ai-warning" class="message warn hidden">The local AI was not used, so names with no hint around them can be missed. Look through the copy before you upload it.</div>
+      <div id="review-error" class="message bad hidden" role="alert"></div>
+      <details id="notes-box" class="hidden" style="margin-top:14px">
+        <summary>Worth knowing</summary>
+        <ul class="tight small" id="notes"></ul>
+      </details>
+    </div>
+
+    <div class="card" id="questions-card">
+      <div id="questions-open">
+        <div class="q-head">
+          <div><h2 id="questions-title"></h2><div class="small muted" style="margin-top:2px">You can skip them: what is unclear stays apart.</div></div>
+          <button class="btn plain hidden" id="questions-hide" type="button">Done</button>
+        </div>
+        <div class="small muted sel q-where" id="question-where"></div>
+        <div class="question-text" id="question-text"></div>
+        <div class="options" id="question-options"></div>
+        <div class="nav">
+          <button class="btn" id="previous" type="button">Previous</button>
+          <span class="small muted" id="question-count"></span>
+          <button class="btn" id="next" type="button">Skip for now</button>
+        </div>
+      </div>
+      <div class="q-done hidden" id="questions-done">
+        <svg class="icon"><use href="#i-check"/></svg><span>All questions answered</span>
+        <button class="btn plain" id="questions-review" type="button">Review answers</button>
+      </div>
+    </div>
+
+    <div class="card rows">
+      <div class="sect" id="sect-level">
+        <button class="sect-head" id="head-level" type="button" aria-expanded="false" aria-controls="body-level">
+          <span class="sect-title">Protection level</span><span class="sect-state" id="state-level"></span><span class="chevron"></span>
+        </button>
+        <div class="sect-body" id="body-level"><div class="sect-inner"><div class="sect-pad">
+          <div class="seg" id="levels" role="radiogroup" aria-label="Privacy level"></div>
+          <p style="margin:12px 0 0" id="level-summary"></p>
+          <div class="effect">
+            <div>
+              <div class="number" id="big-number"></div>
+              <div class="small muted" id="big-caption"></div>
+            </div>
+            <div>
+              <span class="pill sel" id="label"></span>
+              <ul class="tight small" id="reasons"></ul>
+            </div>
+          </div>
+          <div id="not-checked" class="message warn hidden"></div>
+          <details style="margin-top:14px">
+            <summary>Table by table</summary>
+            <div class="scroll"><table>
+              <thead><tr><th>Table</th><th class="num">Singled out</th><th class="num">In a group under 5</th><th>Compared</th></tr></thead>
+              <tbody id="table-rows"></tbody>
+            </table></div>
+          </details>
+        </div></div></div>
+      </div>
+
+      <div class="sect" id="sect-found">
+        <button class="sect-head" id="head-found" type="button" aria-expanded="false" aria-controls="body-found">
+          <span class="sect-title">What was found</span><span class="sect-state" id="state-found"></span><span class="chevron"></span>
+        </button>
+        <div class="sect-body" id="body-found"><div class="sect-inner"><div class="sect-pad">
+          <p class="muted small" id="find-intro"></p>
+          <div id="find-area">
+            <div class="tools">
+              <span class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="find-search" placeholder="Search what was found" aria-label="Search what was found"></span>
+              <span class="small muted" id="find-kept"></span>
+            </div>
+            <div class="groups" id="find-groups"></div>
+          </div>
+          <hr class="rule">
+          <div><strong style="font-weight:600">Something missed?</strong> <span class="muted">Add a word or name, and it is replaced everywhere.</span></div>
+          <div class="add-line">
+            <input type="text" id="add-term" placeholder="Word or name" aria-label="Word or name to add" autocomplete="off" autocapitalize="off" spellcheck="false">
+            <button class="btn" id="add-button" type="button">Add</button>
+            <span class="spinner mini hidden" id="add-spinner" role="status" aria-label="Looking through your files again"></span>
+            <span class="small muted hidden" id="add-wait">Looking through your files again</span>
+          </div>
+          <div class="chips hidden" id="chips" aria-label="Added by you"></div>
+          <div id="add-error" class="message bad hidden" role="alert"></div>
+        </div></div></div>
+      </div>
+
+      <div class="sect" id="sect-lost">
+        <button class="sect-head" id="head-lost" type="button" aria-expanded="false" aria-controls="body-lost">
+          <span class="sect-title">What loses detail</span><span class="sect-state" id="state-lost"></span><span class="chevron"></span>
+        </button>
+        <div class="sect-body" id="body-lost"><div class="sect-inner"><div class="sect-pad">
+          <p class="muted small" id="lost-intro"></p>
+          <div class="scroll" id="lost-box"><table>
+            <thead><tr><th>Column</th><th>Table</th><th>What happens</th><th id="keep-head">Keep?</th></tr></thead>
+            <tbody id="lost-rows"></tbody>
+          </table></div>
+          <details style="margin-top:14px">
+            <summary>Add columns to the check</summary>
+            <p class="muted small">Sex, age and all dates are compared automatically. Tick anything else someone could know about a patient, such as a rare diagnosis. At level 4, rare values there are blanked too.</p>
+            <span class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="column-search" placeholder="Search column names" aria-label="Search column names"></span>
+            <div class="scroll" style="margin-top:8px" id="column-list"></div>
+          </details>
+        </div></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Protect: result -->
+  <section id="done" class="hidden">
+    <div class="card">
+      <div class="done-head">
+        <div class="lead-mark good"><svg class="icon"><use href="#i-check"/></svg></div>
+        <div><h1>The copy is finished</h1></div>
+      </div>
+      <div id="done-errors" class="message bad hidden"></div>
+      <div id="done-left-out" class="message warn hidden"></div>
+
+      <div class="next-title">What to do next</div>
+      <ol class="next">
+        <li><span><strong>Look through the copy before you upload it.</strong> <span class="muted">Automatic detection is never perfect.</span></span></li>
+        <li><span>Upload files from the copy to your AI tool, <strong>never the key folder</strong>.</span></li>
+        <li id="next-restore"><span>Later, use <strong>Restore</strong> to put the real values back into the results.</span></li>
+      </ol>
+      <div class="paths">
+        <div class="path-row"><div class="what">The copy</div><code id="done-output"></code></div>
+        <div class="path-row" id="done-key-line"><div class="what">Key and log: keep private and never upload</div><code id="done-key"></code></div>
+      </div>
+      <div class="row-end" style="margin-top:18px">
+        <button class="btn large" id="again" type="button">Back to this folder</button>
+        <button class="btn large" id="another" type="button">Protect something else</button>
+        <button class="btn primary large" id="finder" type="button">Show the copy in Finder</button>
+      </div>
+
+      <hr class="rule" style="margin:22px 0 18px">
+      <span class="pill sel" id="done-label"></span>
+      <ul class="tight" id="done-reasons"></ul>
+      <p id="done-kept" class="small hidden" style="margin-top:12px"></p>
+      <ul class="tight small" id="done-notes"></ul>
+      <details style="margin-top:14px">
+        <summary>Details</summary>
+        <p class="small muted">Measured on the files as written.</p>
+        <div class="scroll"><table>
+          <thead><tr><th>Table</th><th class="num">Singled out</th><th class="num">In a group under 5</th></tr></thead>
+          <tbody id="done-rows"></tbody>
+        </table></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- Restore: results, key, password -->
+  <section id="restore" class="hidden">
+    <div class="hero">
+      <h1>Put the real values back</h1>
+      <p class="muted">Puts the real values back into results the AI gave you, using your key file and password.</p>
+    </div>
+    <div class="card">
+      <div class="form-row" style="align-items:start">
+        <span class="dot" id="dot-results" style="margin-top:2px"><svg class="icon"><use href="#i-check"/></svg></span>
+        <div class="name" style="padding-top:3px">Results</div>
+        <div>
+          <div class="drop" id="restore-drop">
+            <div class="big" style="font-size:16px">Drop a folder or files here</div>
+            <div class="muted small">What the AI gave you, saved on this computer</div>
+            <div class="buttons" style="margin-top:14px">
+              <button class="btn" id="restore-folder" type="button" title="Command-O">Choose a folder</button>
+              <button class="btn" id="restore-files" type="button">Choose files</button>
+            </div>
+          </div>
+          <div class="value hidden" id="restore-chosen">
+            <div class="chosen-item grow">
+              <svg class="icon"><use href="#i-folder"/></svg>
+              <div style="min-width:0"><strong id="restore-name"></strong><div class="small muted" id="restore-count"></div></div>
+            </div>
+            <button class="btn" id="restore-change" type="button">Change</button>
+          </div>
+        </div>
+      </div>
+      <div class="form-row">
+        <span class="dot" id="dot-key"><svg class="icon"><use href="#i-check"/></svg></span>
+        <div class="name">Key file</div>
+        <div class="value">
+          <div class="grow"><code id="key-path"></code><div class="small muted" id="key-note"></div></div>
+          <button class="btn" id="choose-key" type="button">Choose key file</button>
+        </div>
+      </div>
+      <div class="form-row">
+        <span class="dot" id="dot-password"><svg class="icon"><use href="#i-check"/></svg></span>
+        <div class="name"><label for="restore-password">Password</label></div>
+        <div class="value"><input type="password" id="restore-password" placeholder="Password of the key" autocomplete="off"></div>
+      </div>
+      <div id="restore-error" class="message bad hidden" role="alert" style="margin-top:0"></div>
+      <div class="row-end" style="margin-top:16px">
+        <span class="small muted" style="margin-right:auto" id="restore-hint"></span>
+        <button class="btn primary large" id="restore-go" type="button" disabled>Restore</button>
+      </div>
+    </div>
+    <div class="assure"><svg class="icon"><use href="#i-lock"/></svg>Nothing leaves this computer.</div>
+  </section>
+
+  <!-- Restore: result -->
+  <section id="restored" class="hidden">
+    <div class="card">
+      <div class="done-head">
+        <div class="lead-mark good"><svg class="icon"><use href="#i-check"/></svg></div>
+        <div><h1>The real values are back</h1></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="value" id="restored-files"></div><div class="what" id="restored-files-what"></div></div>
+        <div class="stat"><div class="value" id="restored-values"></div><div class="what" id="restored-values-what"></div></div>
+        <div class="stat"><div class="value" id="restored-unknown"></div><div class="what" id="restored-unknown-what"></div></div>
+      </div>
+      <div id="restored-errors" class="message bad hidden"></div>
+      <div id="restored-unknown-note" class="message warn hidden"></div>
+      <div id="restored-skipped" class="message warn hidden"></div>
+      <div class="next-title">What to do next</div>
+      <ol class="next">
+        <li><span><strong>These files hold real patient data again.</strong> <span class="muted">Keep them on this computer and do not upload them.</span></span></li>
+        <li><span>Open the restored files in Finder and check a few values.</span></li>
+      </ol>
+      <div class="paths">
+        <div class="path-row"><div class="what">The restored files</div><code id="restored-output"></code></div>
+      </div>
+      <div class="row-end" style="margin-top:18px">
+        <button class="btn large" id="to-protect" type="button">Protect</button>
+        <button class="btn large" id="restore-again" type="button">Restore another</button>
+        <button class="btn primary large" id="restore-finder" type="button">Show in Finder</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="actionbar hidden" id="actionbar">
+  <div class="actionbar-in">
+    <div class="line sel" id="export-summary"></div>
+    <button class="btn primary large" id="export" type="button">Make the copy</button>
+  </div>
+</footer>
+
+<!-- The sheet that asks for the password, or for a yes, before the copy is made -->
+<div class="sheet-wrap hidden" id="sheet">
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" aria-describedby="sheet-note">
+    <h2 id="sheet-title"></h2>
+    <p class="small muted" id="sheet-note" style="margin:0"></p>
+    <div class="fields" id="sheet-fields">
+      <span class="pw">
+        <input type="password" id="password" placeholder="Password" aria-label="Password" autocomplete="new-password">
+        <button class="eye" id="eye" type="button" aria-label="Show the password" aria-pressed="false"><svg class="icon"><use id="eye-icon" href="#i-eye"/></svg></button>
+      </span>
+      <span class="pw"><input type="password" id="password2" placeholder="Repeat password" aria-label="Repeat password" autocomplete="new-password"></span>
+    </div>
+    <div id="sheet-error" class="message bad hidden" role="alert"></div>
+    <div class="row-end" style="margin-top:18px">
+      <button class="btn large" id="sheet-cancel" type="button">Cancel</button>
+      <button class="btn primary large" id="sheet-go" type="button">Make the copy</button>
+    </div>
+  </div>
+</div>
+
+<div class="dropover" id="dropover" aria-hidden="true">
+  <div class="dropover-in"><svg class="icon"><use href="#i-drop"/></svg><span id="dropover-text"></span></div>
+</div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const api = () => window.pywebview.api;
+const FAILED = "Something went wrong. Your original files were not changed.";
+const PAGE = 50;  // rows of one group shown at a time: the list stays fast with thousands of findings
+const SOURCES = { column: "from a column", rule: "by a rule", ai: "by the local AI", known: "known from elsewhere", added: "added by you" };
+const SECTIONS = ["start", "busy", "review", "done", "restore", "restored"];
+const TITLES = {  // every error gets a short, friendly headline
+  "start-error": "That did not work", "review-error": "The numbers could not be updated", "add-error": "This could not be added",
+  "sheet-error": "The copy was not made", "restore-error": "That did not work",
+};
+
+const state = {
+  tab: "protect", view: { protect: "start", restore: "restore" }, busy: false, sheet: false,
+  scan: null, preview: null, level: 1, answers: {}, ticked: [], kept: [], current: 0, output: "", showAnswers: false,
+  keep: new Set(), extra: [], reviewing: false,
+  groups: [], open: new Set(), closed: new Set(), limits: {}, badges: new Map(),
+  sections: { level: false, found: false, lost: false },  // remembered while the page lives
+  restore: { paths: [], info: null, key: "", suggested: false, output: "" },
+};
+
+// --------------------------------------------------------------- small helpers
+function text(el, value) { el.textContent = value; return el; }
+function make(tag, cls, value) { const el = document.createElement(tag); if (cls) el.className = cls; if (value !== undefined) el.textContent = value; return el; }
+function cell(row, value, cls) { const td = make("td", cls, value); row.appendChild(td); return td; }
+function sameRef(a, b) { return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]; }
+function hasRef(list, ref) { return list.some(r => sameRef(r, ref)); }
+function plural(n, word) { return `${n} ${word}${n === 1 ? "" : "s"}`; }
+function showMessage(id, message, title) {
+  const box = $(id);
+  box.replaceChildren(make("strong", "", title || TITLES[id] || "That did not work"), make("span", "", message));
+  box.classList.remove("hidden");
+}
+function hide(id) { $(id).classList.add("hidden"); }
+function button(label, cls) { const b = make("button", cls || "btn", label); b.type = "button"; return b; }
+function icon(name) {
+  const ns = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(ns, "svg");
+  svg.setAttribute("class", "icon");
+  svg.setAttribute("aria-hidden", "true");
+  const use = document.createElementNS(ns, "use");
+  use.setAttribute("href", "#i-" + name);
+  svg.appendChild(use);
+  return svg;
+}
+function manyOf(label) {
+  // "Name" -> "Names", "Date of birth" -> "Dates of birth", "Word added by you" -> "Words added by you"
+  const cut = / (of|added|in|from|by) /.exec(label);
+  const at = cut ? cut.index : -1;
+  const head = at > 0 ? label.slice(0, at) : label;
+  const tail = at > 0 ? label.slice(at) : "";
+  let many = head + "s";
+  if (/(s|x|ch|sh)$/i.test(head)) many = head + "es";
+  else if (/[^aeiou]y$/i.test(head)) many = head.slice(0, -1) + "ies";
+  return many + tail;
+}
+async function call(method, ...args) {
+  // Every call can fail: the answer is then {error}, shown next to the action that asked.
+  try {
+    const result = await api()[method](...args);
+    return result === undefined ? null : result;
+  } catch (e) {
+    return { error: FAILED };
+  }
+}
+function makeSwitch(checked, label, onChange) {
+  const wrap = make("label", "switch");
+  const input = make("input");
+  input.type = "checkbox";
+  input.setAttribute("role", "switch");
+  input.setAttribute("aria-label", label);
+  input.checked = checked;
+  input.addEventListener("change", () => onChange(input.checked));
+  wrap.append(input, make("span", "track"));
+  return wrap;
+}
+function swap(el, value) {
+  // New words fade in, so a changing status reads calmly.
+  if (el.textContent === value) return;
+  el.textContent = value;
+  el.classList.remove("swap");
+  void el.offsetWidth;
+  el.classList.add("swap");
+}
+
+// --------------------------------------------------------------- segmented controls
+function buildSeg(root, items, role, onPick) {
+  root.replaceChildren();
+  root.style.setProperty("--n", items.length);
+  const thumb = make("span", "seg-thumb");
+  thumb.setAttribute("aria-hidden", "true");
+  root.appendChild(thumb);
+  items.forEach((item, i) => {
+    const b = button(item.label, "seg-item");
+    if (item.note) b.appendChild(make("span", "seg-note", item.note));
+    b.setAttribute("role", role);
+    b.dataset.value = item.value;
+    b.addEventListener("click", () => onPick(item.value));
+    b.addEventListener("keydown", e => {
+      const step = ["ArrowRight", "ArrowDown"].includes(e.key) ? 1 : ["ArrowLeft", "ArrowUp"].includes(e.key) ? -1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      const target = root.querySelectorAll(".seg-item")[(i + step + items.length) % items.length];
+      target.focus();
+      target.click();
+    });
+    root.appendChild(b);
+  });
+}
+function setSeg(root, value) {
+  root.querySelectorAll(".seg-item").forEach((b, i) => {
+    const on = b.dataset.value === String(value);
+    b.classList.toggle("on", on);
+    b.setAttribute(b.getAttribute("role") === "tab" ? "aria-selected" : "aria-checked", String(on));
+    b.tabIndex = on ? 0 : -1;
+    if (on) root.style.setProperty("--i", i);
+  });
+}
+
+// --------------------------------------------------------------- which screen is shown
+function render() {
+  const visible = state.busy ? "busy" : state.view[state.tab];
+  SECTIONS.forEach(s => $(s).classList.toggle("hidden", s !== visible));
+  $("actionbar").classList.toggle("hidden", visible !== "review");
+  setSeg($("tabs"), state.tab);
+  $("tabs").querySelectorAll(".seg-item").forEach(b => { b.disabled = state.busy; });
+}
+function go(view) { state.busy = false; state.view[state.tab] = view; render(); window.scrollTo(0, 0); }
+function setTab(tab) { if (state.busy || state.sheet || tab === state.tab) return; state.tab = tab; render(); window.scrollTo(0, 0); }
+
+function setBusyText(value) {
+  // "Reading your files · File 3 of 12": the first part is the headline, the second a quiet line below.
+  const at = value.indexOf(" · ");
+  swap($("busy-text"), at >= 0 ? value.slice(0, at) : value);
+  swap($("busy-sub"), at >= 0 ? value.slice(at + 3) : "");
+}
+async function withBusy(message, method, ...args) {
+  state.busy = true;
+  text($("busy-text"), "");
+  text($("busy-sub"), "");
+  setBusyText(message);
+  render();
+  window.scrollTo(0, 0);
+  const ticker = setInterval(async () => {
+    const status = await call("status");
+    if (state.busy && typeof status === "string" && status) setBusyText(status);
+  }, 700);
+  const result = await call(method, ...args);
+  clearInterval(ticker);
+  return result || { error: FAILED };
+}
+
+// --------------------------------------------------------------- choosing what to protect
+async function startScan(paths) {
+  hide("start-error");
+  const result = await withBusy("Reading your files", "scan", paths, $("ai").checked);
+  if (result.error) {
+    go("start");
+    showMessage("start-error", result.error);
+    return;
+  }
+  Object.assign(state, {
+    scan: result, preview: result.preview, level: 1, answers: {}, ticked: [], kept: [], current: 0, showAnswers: false,
+    keep: new Set(), extra: [], open: new Set(), closed: new Set(), limits: {},
+  });
+  $("column-search").value = $("find-search").value = $("add-term").value = "";
+  $("password").value = $("password2").value = "";
+  hide("review-error");
+  hide("add-error");
+  buildReview();
+  go("review");
+}
+
+async function chooseAndScan(kind) {
+  const paths = await call("choose", kind);
+  if (paths && paths.error) { showMessage("start-error", paths.error); return; }
+  if (paths && paths.length) startScan(paths);
+}
+$("choose-folder").addEventListener("click", () => chooseAndScan("folder"));
+$("choose-files").addEventListener("click", () => chooseAndScan("files"));
+
+// The whole window takes a drop. The window tells the page what was dropped, with full paths.
+function dropWords() {
+  if (state.busy || state.sheet) return "";
+  if (state.tab === "protect") return state.view.protect === "start" ? "Drop to protect" : "";
+  return "Drop the results here";
+}
+let dragTimer = 0;
+function dragOver(on) { clearTimeout(dragTimer); $("dropover").classList.toggle("on", on); }
+window.itemsDropped = paths => {
+  dragOver(false);
+  if (!dropWords() || !Array.isArray(paths) || !paths.length) return;
+  if (state.tab === "protect") { startScan(paths); return; }
+  const keys = paths.filter(p => String(p).toLowerCase().endsWith(".vault"));
+  const rest = paths.filter(p => !keys.includes(p));
+  if (state.view.restore === "restored") go("restore");
+  if (keys.length) setKey(keys[0], false);
+  if (rest.length) setRestorePaths(rest);
+};
+for (const type of ["dragenter", "dragover"]) {
+  document.addEventListener(type, e => {
+    e.preventDefault();
+    const words = dropWords();
+    if (!words) return;
+    text($("dropover-text"), words);
+    dragOver(true);
+    dragTimer = setTimeout(() => dragOver(false), 400);  // dragging goes on sending these: silence means it left
+  });
+}
+document.addEventListener("drop", e => { e.preventDefault(); dragOver(false); });
+
+// --------------------------------------------------------------- the review screen
+function buildReview() {
+  const s = state.scan;
+  text($("folder-name"), s.folder);
+  const facts = [plural(s.tables, "table")];
+  if (s.other_files) facts.push(plural(s.other_files, "other file"));
+  if (s.unsupported.length) facts.push(`${s.unsupported.length} not supported (these are left out)`);
+  text($("folder-facts"), facts.join(" · "));
+  text($("restart"), s.single ? "Choose another file" : "Choose another folder");
+  text($("again"), s.single ? "Back to this file" : "Back to this folder");
+  $("ai-warning").classList.toggle("hidden", s.used_ai);
+  buildSeg($("levels"), s.levels.map(l => ({ value: l.number, label: `${l.number}. ${l.name}`, note: l.number === 1 ? "recommended" : "" })), "radio", n => setLevel(Number(n)));
+  groupFindings();
+  renderTypeChips();
+  renderSections();
+  renderColumns();
+  renderLevel();
+  renderFindings();
+  renderChips();
+  renderQuestions();
+  $("notes").replaceChildren(...s.notes.map(n => make("li", "", n)));
+  $("notes-box").classList.toggle("hidden", !s.notes.length);
+}
+
+function renderSections() {
+  for (const name of Object.keys(state.sections)) {
+    $("sect-" + name).classList.toggle("open", state.sections[name]);
+    $("head-" + name).setAttribute("aria-expanded", String(state.sections[name]));
+  }
+}
+for (const name of Object.keys(state.sections)) {
+  $("head-" + name).addEventListener("click", () => { state.sections[name] = !state.sections[name]; renderSections(); });
+}
+
+function renderTypeChips() {
+  const chips = $("type-chips");
+  chips.replaceChildren();
+  chips.classList.toggle("hidden", !state.groups.length);
+  for (const g of state.groups) {
+    const chip = button(g.items.length === 1 ? g.label : manyOf(g.label), "tchip");
+    chip.appendChild(make("span", "", String(g.items.length)));
+    chip.title = "Show these";
+    chip.addEventListener("click", () => {
+      // Opens "What was found" at this group.
+      state.sections.found = true;
+      state.open.add(g.type);
+      $("find-search").value = "";
+      renderSections();
+      renderFindings();
+      const head = [...$("find-groups").querySelectorAll(".group-head")].find(h => h.dataset.type === g.type);
+      if (!head) return;
+      const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      setTimeout(() => { head.scrollIntoView({ block: "center", behavior: calm ? "auto" : "smooth" }); head.focus({ preventScroll: true }); }, calm ? 0 : 260);
+    });
+    chips.appendChild(chip);
+  }
+}
+
+function setLevel(number) { state.level = number; renderLevel(); renderQuestions(); }
+
+function renderLevel() {
+  const level = state.scan.levels[state.level - 1];
+  const p = state.preview[String(state.level)];
+  setSeg($("levels"), state.level);
+  text($("state-level"), `${level.number} · ${level.name}${level.number === 1 ? " (recommended)" : ""}`);
+  text($("level-summary"), level.summary);
+
+  // The big number: the table where most people can be singled out. Never better than the worst.
+  if (p.worst) {
+    text($("big-number"), `${p.worst.percent.toFixed(p.worst.percent > 0 && p.worst.percent < 10 ? 1 : 0)}%`);
+    text($("big-caption"), `of ${p.worst.unit} can still be singled out, in the most exposed table`);
+  } else {
+    text($("big-number"), "?");
+    text($("big-caption"), "No sex, age or date columns left to compare, so the check cannot give a number");
+  }
+  const pill = $("label");
+  text(pill, p.anonymous ? "Would pass: " + p.label : p.label);
+  pill.className = "pill sel " + (p.anonymous ? "good" : "warn");
+  $("reasons").replaceChildren(...p.reasons.slice(0, 8).map(r => make("li", "", r)));
+  if (p.reasons.length > 8) $("reasons").appendChild(make("li", "", `and ${p.reasons.length - 8} more`));
+
+  const notChecked = $("not-checked");
+  notChecked.classList.toggle("hidden", !p.could_not_check.length);
+  if (p.could_not_check.length) {
+    text(notChecked, "Could not check, which does not mean safe: " + p.could_not_check.map(t => `${t.title} (${t.reason})`).join("; "));
+  }
+
+  const rows = $("table-rows");
+  rows.replaceChildren();
+  p.tables.forEach(t => {
+    const tr = make("tr");
+    cell(tr, t.title);
+    if (t.status === "checked") {
+      cell(tr, `${t.singled_out} of ${t.total} ${t.unit} (${t.percent}%)`, "num");
+      cell(tr, `${t.in_small_group} (${t.percent_small}%)`, "num");
+      cell(tr, t.characteristics.join(", "));
+    } else {
+      const message = t.status === "could_not_check" ? `Could not check: ${t.reason}` : "Nothing left to compare";
+      cell(tr, message).colSpan = 3;
+    }
+    rows.appendChild(tr);
+  });
+  renderLost(p);
+  renderExportNote();
+}
+
+function renderLost(p) {
+  const columns = p.lost.length;
+  const now = [columns ? plural(columns, "column") : "No columns"];
+  if (p.left_out.length) now.push(`${plural(p.left_out.length, "file")} left out`);
+  text($("state-lost"), now.join(" · "));
+  const extras = [columns ? `At level ${state.level}, ${plural(columns, "column")} lose${columns === 1 ? "s" : ""} detail.` : `At level ${state.level}, no column loses detail.`];
+  if (p.blanked_rows) extras.push(`Details will be blanked in ${plural(p.blanked_rows, "row")} that would still stand out.`);
+  if (p.left_out.length) extras.push(`${plural(p.left_out.length, "file")} will be left out: ${p.left_out.slice(0, 5).join(", ")}${p.left_out.length > 5 ? " and others" : ""}.`);
+  if (!columns && extras.length === 1 && state.level === 1) extras.push("Every other cell comes out exactly as it went in. Birth dates become the year, as always.");
+  text($("lost-intro"), extras.join(" "));
+  $("lost-box").classList.toggle("hidden", !columns);
+  const anyText = p.lost.some(l => l.free_text);
+  $("keep-head").classList.toggle("hidden", !anyText);
+  const rows = $("lost-rows");
+  rows.replaceChildren();
+  p.lost.forEach(item => {
+    const tr = make("tr");
+    cell(tr, item.header);
+    cell(tr, item.table);
+    cell(tr, item.change);
+    if (anyText) {
+      const td = cell(tr, "");
+      if (item.free_text) {
+        const box = make("input");
+        box.type = "checkbox";
+        box.checked = hasRef(state.kept, item.ref);
+        box.title = "This column is not free text: keep it. The result will then not get the strongest label.";
+        box.setAttribute("aria-label", `Keep ${item.header}`);
+        box.addEventListener("change", () => {
+          state.kept = box.checked ? [...state.kept, item.ref] : state.kept.filter(r => !sameRef(r, item.ref));
+          refresh();
+        });
+        td.appendChild(box);
+      }
+    }
+    rows.appendChild(tr);
+  });
+}
+
+function renderColumns() {
+  const term = $("column-search").value.trim().toLowerCase();
+  const list = $("column-list");
+  list.replaceChildren();
+  state.scan.columns
+    .filter(c => !term || c.header.toLowerCase().includes(term) || hasRef(state.ticked, c.ref))
+    .slice(0, 300)
+    .forEach(c => {
+      const label = make("label", "check-line small");
+      const box = make("input");
+      box.type = "checkbox";
+      box.checked = hasRef(state.ticked, c.ref);
+      box.addEventListener("change", () => {
+        state.ticked = box.checked ? [...state.ticked, c.ref] : state.ticked.filter(r => !sameRef(r, c.ref));
+        refresh();
+      });
+      const name = make("span", "", `${c.header} `);
+      name.appendChild(make("span", "muted", c.table));
+      label.append(box, name);
+      list.appendChild(label);
+    });
+  if (!list.children.length) list.appendChild(make("div", "small muted", "No column with this name."));
+}
+$("column-search").addEventListener("input", renderColumns);
+
+let refreshing = 0;
+async function refresh() {
+  const mine = ++refreshing;
+  hide("review-error");
+  const preview = await call("preview", state.answers, state.ticked, state.kept);
+  if (mine !== refreshing) return;
+  if (!preview || preview.error) {
+    showMessage("review-error", preview ? preview.error : FAILED);
+    return;
+  }
+  state.preview = preview;
+  renderLevel();
+}
+
+// --------------------------------------------------------------- what was found
+function groupFindings() {
+  const groups = new Map();
+  for (const f of state.scan.findings || []) {
+    let group = groups.get(f.type);
+    if (!group) groups.set(f.type, group = { type: f.type, label: f.label || f.type, items: [] });
+    f.lower = String(f.value).toLowerCase();
+    group.items.push(f);
+  }
+  state.groups = [...groups.values()];
+}
+function isKept(f) { return f.can_keep && state.keep.has(f.id); }
+function keptCount() {
+  let n = 0;
+  for (const g of state.groups) for (const f of g.items) if (isKept(f)) n += 1;
+  return n;
+}
+function renderKept() {
+  // Everything that depends on what is switched off: badges, the lines at the top and at the bottom.
+  const files = new Set();
+  let total = 0, kept = 0;
+  for (const g of state.groups) {
+    let here = 0;
+    for (const f of g.items) {
+      total += 1;
+      if (isKept(f)) here += 1; else for (const file of f.files) files.add(file);
+    }
+    kept += here;
+    const badge = state.badges.get(g.type);
+    if (badge) text(badge, here ? `${here} kept` : "").classList.toggle("hidden", !here);
+  }
+  const replaced = total - kept;
+  text($("summary-line"), replaced
+    ? `${plural(replaced, "detail")} in ${plural(files.size, "file")} will be replaced by codes. Your originals stay untouched.`
+    : "Nothing will be replaced. Your originals stay untouched.");
+  const now = [plural(total, "value")];
+  if (kept) now.push(`${kept} kept`);
+  if (state.extra.length) now.push(`${state.extra.length} added`);
+  text($("state-found"), now.join(" · "));
+  text($("find-kept"), kept ? `${plural(kept, "value")} switched off: kept as ${kept === 1 ? "it is" : "they are"}` : "");
+  renderExportNote();
+}
+
+function isAdded(f) { return f.source === "added" && !f.can_keep; }
+function placesText(f) {
+  // For a word the user added: what happened to it in the files.
+  if (f.count > 0) return `replaced in ${plural(f.count, "place")}`;
+  if (f.already_replaced > 0) return "already replaced";
+  return "not found in your files";
+}
+
+function findingRow(f) {
+  const row = make("div", "frow");
+  const value = make("div", "fval sel", f.value);
+  value.title = f.value;
+  const count = make("span", "fcount", `${f.count}×`);
+  count.title = `Found ${f.count === 1 ? "once" : f.count + " times"}`;
+  const files = button(plural(f.files.length, "file"), "ffiles");
+  files.title = f.files.join("\n");
+  files.setAttribute("aria-expanded", "false");
+  files.addEventListener("click", () => {
+    const open = row.querySelector(".ffilelist");
+    if (open) open.remove(); else row.appendChild(make("div", "ffilelist", f.files.join(" · ")));
+    files.setAttribute("aria-expanded", String(!open));
+  });
+  const act = make("div", "fact");
+  if (f.can_keep) {
+    const word = make("span", "", "Replace");
+    const paint = () => { const kept = state.keep.has(f.id); row.classList.toggle("kept", kept); text(word, kept ? "Kept as it is" : "Replace"); };
+    act.append(word, makeSwitch(!state.keep.has(f.id), `Replace ${f.value}`, on => {
+      if (on) state.keep.delete(f.id); else state.keep.add(f.id);
+      paint();
+      renderKept();
+    }));
+    paint();
+  } else if (isAdded(f)) {
+    act.append(make("span", "", placesText(f)));  // removed with its chip below, so no switch here
+  } else {
+    act.append(icon("lock"), make("span", "", "whole column is replaced"));
+    act.title = "This value comes from a column that is replaced as a whole.";
+  }
+  const nowhere = !f.files.length;  // an added word that is not in the files: nothing to count or list
+  row.append(value, make("span", "fsrc", SOURCES[f.source] || ""), nowhere ? make("span") : count, nowhere ? make("span") : files, act);
+  return row;
+}
+
+function renderFindings() {
+  const all = state.scan.findings || [];
+  const term = $("find-search").value.trim().toLowerCase();
+  text($("find-intro"), all.length
+    ? "Everything listed here is replaced in the copy. Switch one off to keep it as it is, for example the name of a method or a hospital you need."
+    : "Nothing was found that needs replacing. Look through the copy before you upload it.");
+  $("find-area").classList.toggle("hidden", !all.length);
+  const box = $("find-groups");
+  box.replaceChildren();
+  state.badges = new Map();
+  for (const g of state.groups) {
+    const items = term ? g.items.filter(f => f.lower.includes(term)) : g.items;
+    if (!items.length) continue;
+    const open = term ? !state.closed.has(g.type) : state.open.has(g.type);
+    const group = make("div", "group");
+    const head = button("", "group-head" + (open ? " open" : ""));
+    head.setAttribute("aria-expanded", String(open));
+    head.dataset.type = g.type;
+    const badge = make("span", "group-kept hidden");
+    state.badges.set(g.type, badge);
+    head.append(
+      make("span", "chevron"),
+      make("span", "group-name", g.items.length === 1 ? g.label : manyOf(g.label)),
+      make("span", "group-count", term ? `${items.length} of ${g.items.length}` : String(g.items.length)),
+      badge,
+    );
+    head.addEventListener("click", () => {
+      const set = term ? state.closed : state.open;
+      const wasOpen = term ? !set.has(g.type) : set.has(g.type);
+      if (wasOpen === Boolean(term)) set.add(g.type); else set.delete(g.type);
+      renderFindings();
+      const again = [...$("find-groups").querySelectorAll(".group-head")].find(h => h.dataset.type === g.type);
+      if (again) again.focus();
+    });
+    group.appendChild(head);
+    if (open) {
+      const body = make("div", "group-body");
+      const limit = state.limits[g.type] || PAGE;
+      const shown = items.slice(0, limit);
+      shown.forEach((f, i) => { const row = findingRow(f); if (i === shown.length - 1) row.classList.add("last"); body.appendChild(row); });
+      if (items.length > limit) {
+        const more = button(`Show ${Math.min(PAGE, items.length - limit)} more (${items.length - limit} not shown)`, "btn plain more");
+        more.addEventListener("click", () => { state.limits[g.type] = limit + PAGE; renderFindings(); });
+        body.appendChild(more);
+      }
+      group.appendChild(body);
+    }
+    box.appendChild(group);
+  }
+  if (!box.children.length) box.appendChild(make("div", "empty", "Nothing found with this in it. If something was missed, add it below."));
+  renderKept();
+}
+$("find-search").addEventListener("input", () => { state.closed = new Set(); state.limits = {}; renderFindings(); });
+
+function renderChips() {
+  const chips = $("chips");
+  chips.replaceChildren();
+  chips.classList.toggle("hidden", !state.extra.length);
+  const added = new Map((state.scan.findings || []).filter(isAdded).map(f => [f.lower, f]));
+  state.extra.forEach(term => {
+    const chip = make("span", "chip");
+    const found = added.get(term.toLowerCase());
+    const remove = button("", "chip-x");
+    remove.setAttribute("aria-label", `Remove ${term}`);
+    remove.title = "Remove";
+    remove.appendChild(icon("x"));
+    remove.disabled = state.reviewing;
+    remove.addEventListener("click", () => changeExtra(state.extra.filter(t => t !== term)));
+    chip.appendChild(make("span", "", term));
+    if (found) chip.appendChild(make("span", "chip-note", placesText(found)));
+    chip.appendChild(remove);
+    chips.appendChild(chip);
+  });
+}
+
+function setReviewing(on) {
+  state.reviewing = on;
+  $("add-spinner").classList.toggle("hidden", !on);
+  $("add-wait").classList.toggle("hidden", !on);
+  $("add-term").disabled = $("add-button").disabled = $("export").disabled = on;
+  $("chips").querySelectorAll("button").forEach(b => { b.disabled = on; });
+}
+
+// Adding or removing a word means reading the files again. What was chosen so far stays.
+async function changeExtra(next) {
+  if (state.reviewing) return false;
+  hide("add-error");
+  setReviewing(true);
+  refreshing += 1;  // an older preview that is still on its way no longer fits
+  const result = await call("review", [...state.keep], next);
+  setReviewing(false);
+  if (!result || result.error) {
+    showMessage("add-error", result ? result.error : FAILED);
+    return false;
+  }
+  const ids = new Set(result.questions.map(q => q.id));
+  state.answers = Object.fromEntries(Object.entries(state.answers).filter(([id]) => ids.has(id)));
+  state.extra = next;
+  state.scan = result;
+  state.preview = result.preview;
+  buildReview();
+  if (Object.keys(state.answers).length || state.ticked.length || state.kept.length) refresh();
+  return true;
+}
+async function addTerm() {
+  const input = $("add-term");
+  const term = input.value.trim();
+  if (!term) return;
+  if (term.length < 2) { showMessage("add-error", "Please enter at least 2 characters.", "A little longer, please"); return; }
+  if (state.extra.some(t => t.toLowerCase() === term.toLowerCase())) { showMessage("add-error", "This is already on your list.", "Already added"); return; }
+  if (await changeExtra([...state.extra, term])) { input.value = ""; input.focus(); }
+}
+$("add-button").addEventListener("click", addTerm);
+$("add-term").addEventListener("keydown", e => { if (e.key === "Enter") addTerm(); });
+$("add-term").addEventListener("input", () => hide("add-error"));
+
+// --------------------------------------------------------------- questions, one by one
+function openQuestions() {
+  // Letters are left out at levels 3 and 4, so what is only about them no longer needs an answer.
+  return state.scan.questions.filter(q => state.level < 3 || !q.letters_only);
+}
+function unanswered() { return openQuestions().filter(q => !(q.id in state.answers) && q.kind !== "info").length; }
+
+function renderQuestions() {
+  const questions = openQuestions();
+  $("questions-card").classList.toggle("hidden", !questions.length);
+  $("summary-quiet").classList.toggle("hidden", questions.length > 0);
+  renderExportNote();
+  if (!questions.length) return;
+  const open = questions.filter(q => !(q.id in state.answers)).length;
+  const folded = open === 0 && !state.showAnswers;
+  $("questions-card").classList.toggle("attention", open > 0);
+  $("questions-open").classList.toggle("hidden", folded);
+  $("questions-done").classList.toggle("hidden", !folded);
+  if (folded) return;
+  text($("questions-title"), questions.length === 1 ? "1 short question" : `${questions.length} short questions`);
+  $("questions-hide").classList.toggle("hidden", open > 0);
+  state.current = Math.max(0, Math.min(state.current, questions.length - 1));
+  const q = questions[state.current];
+  text($("question-where"), q.files.slice(0, 3).join(", ") + (q.files.length > 3 ? ` and ${q.files.length - 3} more` : ""));
+  text($("question-text"), q.text);
+  const options = $("question-options");
+  const hadFocus = options.contains(document.activeElement);
+  options.replaceChildren();
+  q.options.forEach(option => {
+    const b = button(option.label);
+    const chosen = state.answers[q.id] === option.value;
+    b.classList.toggle("chosen", chosen);
+    b.setAttribute("aria-pressed", String(chosen));
+    b.addEventListener("click", () => {
+      const before = questions.filter(x => !(x.id in state.answers)).length;
+      state.answers[q.id] = option.value;
+      if (q.kind === "column") refresh();
+      if (state.current < questions.length - 1) state.current += 1;
+      // The last open answer folds the card to one line.
+      if (before > 0 && questions.every(x => x.id in state.answers)) state.showAnswers = false;
+      renderQuestions();
+      if (!$("questions-done").classList.contains("hidden")) $("questions-review").focus();
+    });
+    options.appendChild(b);
+  });
+  if (hadFocus && options.firstChild) (options.querySelector(".chosen") || options.firstChild).focus();
+  text($("question-count"), `Question ${state.current + 1} of ${questions.length}`);
+  $("previous").disabled = state.current === 0;
+  $("next").disabled = state.current === questions.length - 1;
+  text($("next"), q.id in state.answers ? "Next" : "Skip for now");
+}
+$("previous").addEventListener("click", () => { state.current -= 1; renderQuestions(); });
+$("next").addEventListener("click", () => { state.current += 1; renderQuestions(); });
+$("questions-review").addEventListener("click", () => { state.showAnswers = true; state.current = 0; renderQuestions(); $("questions-hide").focus(); });
+$("questions-hide").addEventListener("click", () => { state.showAnswers = false; renderQuestions(); $("questions-review").focus(); });
+
+function renderExportNote() {
+  if (!state.scan) return;
+  const level = state.scan.levels[state.level - 1];
+  const parts = [`Level ${level.number}: ${level.name}`];
+  const kept = keptCount();
+  if (kept) parts.push(`${plural(kept, "value")} kept as ${kept === 1 ? "it is" : "they are"}`);
+  if (state.extra.length) parts.push(`${plural(state.extra.length, "word")} added by you`);
+  const open = unanswered();
+  if (open) parts.push(`${plural(open, "question")} unanswered`);
+  text($("export-summary"), parts.join(" · "));
+}
+
+// --------------------------------------------------------------- making the copy: the sheet
+function setBehind(inert) { for (const id of ["topbar", "main", "actionbar"]) { if (inert) $(id).setAttribute("inert", ""); else $(id).removeAttribute("inert"); } }
+function showPasswords(on) {
+  $("password").type = $("password2").type = on ? "text" : "password";
+  $("eye").setAttribute("aria-pressed", String(on));
+  $("eye").setAttribute("aria-label", on ? "Hide the password" : "Show the password");
+  $("eye-icon").setAttribute("href", on ? "#i-eye-off" : "#i-eye");
+}
+function openSheet(error, title) {
+  const level = state.scan.levels[state.level - 1];
+  const known = state.scan.has_key;
+  text($("sheet-title"), !level.keeps_key ? "Make the copy without a key?" : known ? "Enter the password of your key" : "Choose a password for your key");
+  text($("sheet-note"), !level.keeps_key
+    ? "No key is kept at this level, so nobody, including you, can trace these codes back. Your originals stay where they are."
+    : known
+      ? "This folder already has a key. Enter its password, so that the same patients keep the same codes."
+      : "Choose a password for the key file. Without it the codes cannot be traced back, and it cannot be recovered.");
+  $("sheet-fields").classList.toggle("hidden", !level.keeps_key);
+  $("password2").parentElement.classList.toggle("hidden", known);
+  $("password").value = $("password2").value = "";
+  showPasswords(false);
+  if (error) showMessage("sheet-error", error, title); else hide("sheet-error");
+  state.sheet = true;
+  $("sheet").classList.remove("hidden");
+  setBehind(true);
+  (level.keeps_key ? $("password") : $("sheet-go")).focus();
+}
+function closeSheet(focusBack) {
+  state.sheet = false;
+  $("password").value = $("password2").value = "";
+  hide("sheet");
+  setBehind(false);
+  if (focusBack) $("export").focus();
+}
+function sheetStops() { return [...$("sheet").querySelectorAll("input, button")].filter(el => el.offsetParent !== null && !el.disabled); }
+
+async function confirmSheet() {
+  const level = state.scan.levels[state.level - 1];
+  let password = "";
+  if (level.keeps_key) {
+    password = $("password").value;
+    if (password.length < 8) { showMessage("sheet-error", "Please use a password of at least 8 characters.", "A little longer, please"); $("password").focus(); return; }
+    if (!state.scan.has_key && password !== $("password2").value) { showMessage("sheet-error", "The two passwords do not match.", "Please check the password"); $("password2").focus(); return; }
+  }
+  closeSheet(false);
+  const result = await withBusy("Writing the copy and checking it", "export",
+    state.level, password, state.answers, state.ticked, state.kept, [...state.keep], state.extra);
+  if (result.error) {
+    go("review");
+    openSheet(result.error);
+    return;
+  }
+  if (!state.scan.has_key && result.key_dir) state.scan.has_key = true;
+  buildDone(result);
+  go("done");
+}
+$("export").addEventListener("click", () => { if (!state.reviewing) openSheet(); });
+$("sheet-cancel").addEventListener("click", () => closeSheet(true));
+$("sheet-go").addEventListener("click", confirmSheet);
+$("eye").addEventListener("click", () => showPasswords($("password").type === "password"));
+$("sheet").addEventListener("keydown", e => {
+  if (e.key === "Escape") { e.preventDefault(); closeSheet(true); return; }
+  if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); confirmSheet(); return; }
+  if (e.key !== "Tab") return;
+  const stops = sheetStops();  // the Tab key stays inside the sheet
+  const at = stops.indexOf(document.activeElement);
+  const next = e.shiftKey ? (at <= 0 ? stops.length - 1 : at - 1) : (at === stops.length - 1 ? 0 : at + 1);
+  e.preventDefault();
+  stops[next].focus();
+});
+
+function fileList(items) { return items.map(s => `${s.file} (${s.reason})`).join("; "); }
+
+function buildDone(r) {
+  state.output = r.output;
+  const pill = $("done-label");
+  text(pill, r.label);
+  pill.className = "pill sel " + (r.anonymous ? "good" : "warn");
+  $("done-reasons").replaceChildren(...r.reasons.map(x => make("li", "", x)));
+  const rows = $("done-rows");
+  rows.replaceChildren();
+  r.tables.forEach(t => {
+    const tr = make("tr");
+    cell(tr, t.title);
+    if (t.status === "checked") {
+      cell(tr, `${t.singled_out} of ${t.total} ${t.unit} (${t.percent}%)`, "num");
+      cell(tr, `${t.in_small_group} (${t.percent_small}%)`, "num");
+    } else {
+      cell(tr, t.status === "could_not_check" ? `Could not check: ${t.reason}` : "Nothing left to compare").colSpan = 2;
+    }
+    rows.appendChild(tr);
+  });
+  const kept = $("done-kept");
+  kept.classList.toggle("hidden", !r.kept);
+  text(kept, r.kept ? `${plural(r.kept, "value")} ${r.kept === 1 ? "was" : "were"} kept as ${r.kept === 1 ? "it is" : "they are"}, as you chose.` : "");
+  const left = $("done-left-out");
+  left.classList.toggle("hidden", !r.skipped.length);
+  text(left, r.skipped.length ? `Left out of the copy: ${fileList(r.skipped)}` : "");
+  const errors = $("done-errors");
+  errors.classList.toggle("hidden", !r.errors.length);
+  text(errors, r.errors.length ? `Not in the copy: ${fileList(r.errors)}` : "");
+  $("done-notes").replaceChildren(...r.notes.map(n => make("li", "", n)));
+  text($("done-output"), r.output);
+  $("done-key-line").classList.toggle("hidden", !r.key_dir);
+  $("next-restore").classList.toggle("hidden", !r.key_dir);
+  text($("done-key"), r.key_dir || "");
+}
+
+$("finder").addEventListener("click", () => call("show_in_finder", state.output));
+$("again").addEventListener("click", () => { buildReview(); go("review"); });
+$("another").addEventListener("click", () => go("start"));
+$("restart").addEventListener("click", () => go("start"));
+
+// --------------------------------------------------------------- restore
+function renderRestore() {
+  const r = state.restore;
+  const password = $("restore-password").value;
+  $("restore-drop").classList.toggle("hidden", r.paths.length > 0);
+  $("restore-chosen").classList.toggle("hidden", !r.paths.length);
+  if (r.info) {
+    text($("restore-name"), r.info.name);
+    text($("restore-count"), plural(r.info.files, "file"));
+  }
+  text($("key-path"), r.key);
+  text($("key-note"), r.key
+    ? (r.suggested ? "Found next to these results. Choose another one if this is not the right key." : "")
+    : "Not chosen yet. It is called key.vault and lies in the private folder Privatier made next to your original.");
+  $("dot-results").classList.toggle("ok", r.paths.length > 0);
+  $("dot-key").classList.toggle("ok", Boolean(r.key));
+  $("dot-password").classList.toggle("ok", Boolean(password));
+  const missing = [];
+  if (!r.paths.length) missing.push("the results");
+  if (!r.key) missing.push("the key file");
+  if (!password) missing.push("the password");
+  $("restore-go").disabled = missing.length > 0;
+  text($("restore-hint"), missing.length
+    ? `Still needed: ${missing.join(", ")}.`
+    : "Your results are not changed: a restored copy is written.");
+}
+function setKey(path, suggested) {
+  state.restore.key = path;
+  state.restore.suggested = suggested;
+  hide("restore-error");
+  renderRestore();
+}
+async function setRestorePaths(paths) {
+  hide("restore-error");
+  const info = await call("restore_info", paths);
+  if (!info || info.error) {
+    showMessage("restore-error", info ? info.error : FAILED);
+    return;
+  }
+  state.restore.paths = paths;
+  state.restore.info = info;
+  if (info.suggested_key && (!state.restore.key || state.restore.suggested)) setKey(info.suggested_key, true);
+  renderRestore();
+  if (state.restore.key) $("restore-password").focus();
+}
+async function chooseForRestore(kind) {
+  const paths = await call("choose", kind);
+  if (paths && paths.error) { showMessage("restore-error", paths.error); return; }
+  if (!paths || !paths.length) return;
+  if (kind === "key") setKey(paths[0], false); else setRestorePaths(paths);
+}
+function clearResults() { state.restore.paths = []; state.restore.info = null; hide("restore-error"); renderRestore(); }
+$("restore-folder").addEventListener("click", () => chooseForRestore("folder"));
+$("restore-files").addEventListener("click", () => chooseForRestore("files"));
+$("choose-key").addEventListener("click", () => chooseForRestore("key"));
+$("restore-change").addEventListener("click", clearResults);
+$("restore-password").addEventListener("input", renderRestore);
+
+async function runRestore() {
+  const r = state.restore;
+  const password = $("restore-password").value;
+  if (!r.paths.length || !r.key || !password) return;
+  hide("restore-error");
+  const result = await withBusy("Putting the real values back", "restore", r.paths, r.key, password);
+  $("restore-password").value = "";
+  renderRestore();
+  if (result.error) {
+    go("restore");
+    showMessage("restore-error", result.error, "Nothing was restored");
+    $("restore-password").focus();
+    return;
+  }
+  buildRestored(result);
+  go("restored");
+}
+$("restore-go").addEventListener("click", runRestore);
+$("restore-password").addEventListener("keydown", e => { if (e.key === "Enter") runRestore(); });
+
+function buildRestored(r) {
+  state.restore.output = r.output;
+  text($("restored-files"), String(r.restored));
+  text($("restored-files-what"), r.restored === 1 ? "file restored" : "files restored");
+  text($("restored-values"), String(r.values));
+  text($("restored-values-what"), r.values === 1 ? "code replaced by its real value" : "codes replaced by their real values");
+  text($("restored-unknown"), String(r.unknown));
+  text($("restored-unknown-what"), r.unknown === 1 ? "code not in this key" : "codes not in this key");
+  const unknown = $("restored-unknown-note");
+  unknown.classList.toggle("hidden", !r.unknown);
+  text(unknown, r.unknown ? `${plural(r.unknown, "code")} ${r.unknown === 1 ? "is" : "are"} not in this key and stayed as ${r.unknown === 1 ? "it is" : "they are"}.` : "");
+  const skipped = $("restored-skipped");
+  skipped.classList.toggle("hidden", !r.skipped.length);
+  text(skipped, r.skipped.length ? `Left out: ${fileList(r.skipped)}` : "");
+  const errors = $("restored-errors");
+  errors.classList.toggle("hidden", !r.errors.length);
+  text(errors, r.errors.length ? `Not restored: ${fileList(r.errors)}` : "");
+  text($("restored-output"), r.output);
+}
+$("restore-finder").addEventListener("click", () => call("show_in_finder", state.restore.output));
+$("restore-again").addEventListener("click", () => { clearResults(); go("restore"); });
+$("to-protect").addEventListener("click", () => { clearResults(); state.view.restore = "restore"; setTab("protect"); });
+
+// --------------------------------------------------------------- behaving like an app
+// The web page menu (Reload, Back) has no place here. Text fields and values keep theirs, for copying.
+document.addEventListener("contextmenu", e => {
+  if (!e.target.closest("input, .sel, td, code, li, .message")) e.preventDefault();
+});
+// Command-O chooses a folder, on the two screens that start with one.
+document.addEventListener("keydown", e => {
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "o") return;
+  e.preventDefault();
+  if (state.busy || state.sheet) return;
+  if (state.tab === "protect" && state.view.protect === "start") chooseAndScan("folder");
+  if (state.tab === "restore" && state.view.restore === "restore") chooseForRestore("folder");
+});
+
+// --------------------------------------------------------------- starting
+buildSeg($("tabs"), [{ value: "protect", label: "Protect" }, { value: "restore", label: "Restore" }], "tab", setTab);
+render();
+renderRestore();
+window.addEventListener("pywebviewready", async () => {
+  const info = await call("startup");
+  const ready = Boolean(info && info.ai_ready);
+  $("ai").checked = ready;
+  $("ai").disabled = !ready;
+  $("ai-recommended").classList.toggle("hidden", !ready);
+  if (!ready) text($("ai-note"), "Not set up on this computer yet. Without it, names with no hint around them can be missed. To set it up, run: privatier setup-ai");
+  if (info && info.version) text($("version"), `Version ${info.version}`);
+});
+</script>
+</body>
+</html>
