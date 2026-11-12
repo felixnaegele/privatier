@@ -25,6 +25,7 @@ from .handlers.csv_handler import _delimiter, _find_header_row as _csv_header_ro
 from .handlers.excel_handler import _find_header_row as _excel_header_row
 from .handlers.text_handler import read_text
 from .identity import name_key
+from .project import MARKER_FILE, is_marked
 from .privacy import LEVELS, MIN_GROUP, UNREAD, Level, _date_of, date_action, is_blank, is_date_object, reduce_value
 from .pseudonyms import TOKEN_RE
 from .tables import column_key, classify_header, column_role, is_age_column, is_sex_column, is_visit_id, looks_like_date_column
@@ -46,8 +47,14 @@ ColumnRef = tuple[str, str, int]
 
 
 def list_files(root: Path) -> list[Path]:
+    """The files of a folder that are read. Privatier's own folder inside it (see project.py) is not:
+    it holds copies, restored results and the key."""
     files = []
-    for path in sorted(root.rglob("*")):
+    paths = sorted(root.rglob("*"))
+    own = {p.parent for p in paths if p.name == MARKER_FILE and p.parent != root and is_marked(p.parent)}
+    for path in paths:
+        if own and any(parent in own for parent in path.parents):
+            continue
         rel = path.relative_to(root)
         if any(part.startswith(".") or part.startswith("~$") for part in rel.parts):
             continue  # hidden files (.DS_Store) and Office lock files
@@ -73,7 +80,7 @@ def select_files(root: Path, only=None) -> list[Path]:
         wanted.add(path)
     chosen = [f for f in files if f.resolve() in wanted]
     if len(chosen) != len(wanted):
-        raise ValueError("A hidden file, a lock file or a link cannot be chosen.")
+        raise ValueError("A hidden file, a lock file, a link or a file in Privatier's own folder cannot be chosen.")
     return chosen
 
 
@@ -84,6 +91,7 @@ class TableColumn:
     kind: str | None = None  # sex, age, birth, date, year, text
     patient: str | None = None  # id, name
     unnamed: bool = False
+    kept: bool = False  # the user said to leave it as it is, and it is not plain numbers: nothing checked it
 
 
 @dataclass
@@ -149,10 +157,17 @@ def _classify(header, label, values: list, index: int, answer: str | None) -> Ta
     named = bool(text.strip()) and not text.startswith("Unnamed")
     column = TableColumn(index, text.strip() or f"(column {index + 1})", unnamed=not named)
     category = classify_header(text if named else None, label)
+    if answer == "KEEP":
+        # Left exactly as it is on the user's word. Unless it is a plain measurement, that has to be said.
+        column.kept = category is not None or any(
+            not isinstance(v, (int, float)) and not (isinstance(v, str) and _NUMBER_TEXT.match(v)) for v in values
+        )
     if answer == "DOB":
         category = "DOB"
     elif answer in ("KEEP_DATES", "KEEP"):
         category = None
+    elif answer in ("ID", "PERSON"):  # what the user says a column is counts more than its header
+        category = answer
     if category in ("DOB", "BIRTH_YEAR"):
         column.kind = "birth"
     elif category == "ID" or answer == "ID":
@@ -416,6 +431,7 @@ class TableCheck:
     free_text: list[str] = field(default_factory=list)
     blanked_rows: int = 0
     not_compared: int = 0  # clinical columns: someone could know these too
+    kept_columns: list[str] = field(default_factory=list)  # left as they are on the user's word, and not checked
 
     @property
     def percent(self) -> float:
@@ -471,12 +487,16 @@ def _check_table(table: Table, plan: Plan | None, extra: set[ColumnRef]) -> tupl
         if c.kind == "text" and not (plan and plan.action(table.file, table.name, c.index) == "empty")
     ]
     blanked = len(plan.blanks.get((table.file, table.name), {})) if plan else 0
+    kept = [c.header for c in table.columns if c.kept]
     not_compared = sum(
         1 for c in table.columns
         if c not in columns and not c.patient and c.kind is None and any(c.index < len(v) and not is_blank(v[c.index]) for _, v in table.rows)
     )
     if not columns:
-        return TableCheck(table.title, "nothing_to_compare", free_text=free_text, blanked_rows=blanked, not_compared=not_compared), {}
+        return TableCheck(
+            table.title, "nothing_to_compare", free_text=free_text, blanked_rows=blanked, not_compared=not_compared,
+            kept_columns=kept,
+        ), {}
     keys, unit = _patient_keys(table)
     _, total, alone, small = _small_rows(table, columns, keys, plan)
     for (number, values), key in zip(table.rows, keys):
@@ -489,6 +509,7 @@ def _check_table(table: Table, plan: Plan | None, extra: set[ColumnRef]) -> tupl
         TableCheck(
             table.title, "checked", unit=unit, total=total, singled_out=alone, in_small_group=small,
             characteristics=[c.header for c in columns], free_text=free_text, blanked_rows=blanked, not_compared=not_compared,
+            kept_columns=kept,
         ),
         facts_of_patient,
     )
@@ -557,6 +578,11 @@ def verdict(level_number: int, check: FolderCheck, named_files: int = 0, uncheck
     for table in check.tables:
         if table.free_text:
             reasons.append(f"{table.title}: free text remains in {', '.join(table.free_text)}.")
+        if table.kept_columns:
+            reasons.append(
+                f"{table.title}: you chose to keep {', '.join(table.kept_columns)} exactly as written, so nothing "
+                "in there was replaced or checked."
+            )
     if check.other_files:
         reasons.append(f"{len(check.other_files)} file(s) that are not tables remain, and these cannot be checked.")
     if named_files:

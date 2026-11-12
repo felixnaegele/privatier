@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- The App Sandbox: the app can only touch what the user chose. -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <key>com.apple.security.files.user-selected.read-write</key>
+    <true/>
+    <key>com.apple.security.files.bookmarks.app-scope</key>
+    <true/>
+    <!-- Needed only so that the window can be drawn: WebKit, which shows the page, does not start without it
+         ("WebContent: Application does not have permission to communicate with network resources").
+         The app itself refuses every connection (packaging/entry.py) and the page may load nothing (ui.html). -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+</dict>
+</plist>

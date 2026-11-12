@@ -18,7 +18,7 @@ from .detect.stopwords import is_ordinary_use, is_stopword
 from .identity import Decisions, Person, Question, Record, Registry, name_key, name_parts, parse_birth_date, surname_first
 from .privacy import LEVELS, UNREAD, is_blank, is_date_object, reduce_value
 from .pseudonyms import GLUED_TOKEN_RE, TOKEN_RE, KnownValueDetector, Pseudonymizer, _normalise, values_to_look_for
-from .review import Finding, Review, clean_terms, finding_key, id_of_key
+from .review import Finding, Review, clean_terms, code_in_words, finding_key, id_of_key
 from .tables import (
     CATEGORY_TO_TYPE,
     classify_header,
@@ -67,6 +67,7 @@ class Column(NamedTuple):
     key: str = ""
     visit_id: bool = False
     dates: bool = False  # the header says this column holds dates other than the birth date
+    keep: bool = False  # the user said to leave this column exactly as it is
 
 
 _DATE_IN_TEXT = re.compile(r"^\s*\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|^\s*\d{4}-\d{2}-\d{2}")
@@ -78,12 +79,16 @@ _MOST = 0.5
 _MIN_VALUES = 5
 
 
+_NUMBER_AS_TEXT = re.compile(r"\s*[-+]?\d+(?:[.,]\d+)?\s*")
+
+
 class _Profile:
     """What the values of one table column look like, to judge columns the header says nothing about."""
 
     def __init__(self, column: Column, label: str):
         self.column, self.label = column, label
         self.filled, self.dates, self.names, self.whole = 0, 0, 0, 0
+        self.words = 0  # cells that hold text, not a number written as text
         self.values: set[str] = set()
         self.texts: set[str] = set()  # as the values are written when they become codes
 
@@ -95,6 +100,7 @@ class _Profile:
             self.dates += 1
         elif isinstance(value, str):
             self.dates += bool(_DATE_IN_TEXT.match(value))
+            self.words += not _NUMBER_AS_TEXT.fullmatch(value)
             self.names += bool(_LOOKS_LIKE_NAME.fullmatch(value.strip())) and not is_stopword(value)
         elif isinstance(value, (int, float)) and float(value).is_integer():
             self.whole += 1
@@ -252,8 +258,8 @@ def _shown(value) -> str:
 
 
 class ColumnValues:
-    """Every value that sits in an identifying table column. Such a value is replaced everywhere, whatever
-    the user says about it, and so is any longer piece of text that contains it."""
+    """Every value that sits in an identifying table column, and any longer piece of text that contains one.
+    This is what the review screen calls source "column"."""
 
     def __init__(self) -> None:
         self._keys: set[tuple[str, str]] = set()
@@ -296,6 +302,9 @@ class ColumnValues:
         return bool(self._detector.detect(text))
 
 
+_NOT_FOUND = "nothing: this word was not found"
+
+
 class _Found:
     """One value that is replaced, and where."""
 
@@ -304,8 +313,11 @@ class _Found:
         self.count = 0
         self.kept = 0
         self.already = 0  # an added word that the data had already established: replaced, but not counted here
+        self.results: set[str] = set()  # for a birth date: what the cell became
         self.files: set[str] = set()
         self.sources: set[str] = set()
+        self.places: Counter[tuple] = Counter()  # (file, table, column) -> how often, for cells of table rows
+        self.loose: Counter[str] = Counter()  # file -> how often anywhere else in it
 
 
 class Anonymizer(Transformer):
@@ -325,7 +337,10 @@ class Anonymizer(Transformer):
         self._keep: set[str] = set(review.keep) if review is not None else set()
         self._known: KnownValueDetector | None = None
         self._found: dict[tuple[str, str], _Found] = {}  # in the files that were read to the end
-        self._found_here: list[tuple[tuple[str, str], str, str, bool]] = []  # in the file being read
+        self._found_here: list[tuple] = []  # in the file being read
+        self._place: tuple | None = None  # (file, table, column) of the cell being read, inside table rows only
+        self.seen_columns: dict[tuple[str, str], list[Column]] = {}  # (file, table) -> its columns, as they are treated
+        self.done_files: list[str] = []
         self._origin: dict[tuple[str, str], set[str]] = {}  # what found a value first
         self._ids: dict[tuple[str, str], str] = {}
         self.plan = plan
@@ -341,7 +356,10 @@ class Anonymizer(Transformer):
         self._table = ""
         self._row_number = 0
         self._profiles: dict[tuple, _Profile] = {}
-        self._column_actions: dict[tuple, str] = {}
+        # What the user says a column is counts for any column, whatever its header or values look like.
+        self._column_actions: dict[tuple, str] = {
+            key: answer for key, answer in self.decisions.columns.items() if answer in ("PERSON", "ID")
+        }
         self._keep_dates = False
         self._ai_seen: dict[tuple, list] = {} if ai_cache is None else ai_cache
         self._has_ai = any(d.name in _AI_SOURCES for d in detectors)
@@ -377,13 +395,14 @@ class Anonymizer(Transformer):
         super().reset_file_stats()
         self._found_here = []
 
-    def _note_found(self, key: tuple[str, str], value: str, source: str, kept: bool = False) -> None:
+    def _note_found(self, key: tuple[str, str], value: str, source: str, kept: bool = False, result=None) -> None:
         if not self.collecting:
-            self._found_here.append((key, value, source, kept))
+            self._found_here.append((key, value, source, kept, result, self._place))
 
     def file_done(self) -> None:
         """The file was read to the end, so what was found in it counts."""
-        for key, value, source, kept in self._found_here:
+        self.done_files.append(self.current_file)
+        for key, value, source, kept, result, place in self._found_here:
             found = self._found.get(key)
             if found is None:
                 found = self._found[key] = _Found(key[0], value)
@@ -392,8 +411,14 @@ class Anonymizer(Transformer):
                 continue
             found.count += 1
             found.kept += kept
+            if result is not None:
+                found.results.add(str(result))
             found.files.add(self.current_file)
             found.sources.add(source)
+            if place is not None:
+                found.places[place] += 1
+            else:
+                found.loose[self.current_file] += 1
         self._found_here = []
 
     def _id(self, key: tuple[str, str]) -> str:
@@ -406,11 +431,12 @@ class Anonymizer(Transformer):
             return finding_key("TERM", term)
         return finding_key(span.entity_type, span.text)
 
+    def _kept(self, key: tuple[str, str]) -> bool:
+        """The user ticked this value to stay as written. That holds wherever it occurs, also in an identifying column."""
+        return bool(self._keep) and key[0] != "TERM" and self._id(key) in self._keep
+
     def _left_as_written(self, span: Span, key: tuple[str, str]) -> bool:
-        """The user said this value is not sensitive. A value of an identifying column is replaced all the same."""
-        if not self._keep or span.entity_type == "TERM" or self._id(key) not in self._keep:
-            return False
-        return not self.columns.holds(span.entity_type, span.text)
+        return self._kept(key)
 
     @property
     def kept_values(self) -> int:
@@ -446,14 +472,65 @@ class Anonymizer(Transformer):
             out.append(
                 Finding(
                     self._id(key), found.type, found.value, found.count, sorted(found.files), source,
-                    source not in ("column", "added"), bool(found.kept), found.already,
+                    source != "added", bool(found.kept), found.already, self._becomes(found),
                 )
             )
         for term in self.terms:  # a word that occurs nowhere is listed too, so that the user sees it was looked for
             key = finding_key("TERM", term)
             if key not in self._found:
-                out.append(Finding(self._id(key), "TERM", term, 0, [], "added", False))
+                out.append(Finding(self._id(key), "TERM", term, 0, [], "added", False, becomes=_NOT_FOUND))
         return sorted(out, key=lambda f: (f.type, f.value.casefold(), f.id))
+
+    def column_kind(self, ref: tuple, column: Column, seen_as: str | None, has_findings: bool) -> tuple[str, str]:
+        """What a table column is treated as, and what it becomes at level 1. `seen_as` is how the check reads it."""
+        action = self._column_actions.get(ref)
+        if column.keep:
+            return "PLAIN", "stays as it is, as you decided"
+        if action in ("PERSON", "ID", "DATE"):
+            return action, code_in_words(action)
+        if column.category == "DOB":
+            return "BIRTH_DATE", "the year only"
+        if column.category == "BIRTH_YEAR":
+            return "BIRTH_YEAR", "stays as it is"
+        if column.category in CATEGORY_TO_TYPE:
+            return CATEGORY_TO_TYPE[column.category], code_in_words(CATEGORY_TO_TYPE[column.category])
+        if action == "KEEP_DATES" or column.dates:
+            return "DATE", "dates stay as they are, with day and month"
+        if column.role == "gender" or seen_as == "sex":
+            return "SEX", "stays as it is"
+        profile = self._profiles.get(ref)
+        if has_findings or (profile is not None and profile.words and self._column_is_free_text(ref)):
+            return "TEXT", "names, dates and the like inside are replaced"
+        if seen_as == "age":
+            return "AGE", "stays as it is"
+        return "PLAIN", "stays as it is"
+
+    def found_by_place(self) -> tuple[dict[tuple, list], dict[str, list]]:
+        """(column -> its findings) and (file -> what is found outside table columns), each as (finding, how often)."""
+        in_columns: dict[tuple, list] = {}
+        loose: dict[str, list] = {}
+        for key, found in self._found.items():
+            for place, count in found.places.items():
+                in_columns.setdefault(place, []).append((key, found, count))
+            for file, count in found.loose.items():
+                loose.setdefault(file, []).append((key, found, count))
+        return in_columns, loose
+
+    def finding_id_of(self, key: tuple[str, str]) -> str:
+        return self._id(key)
+
+    @staticmethod
+    def _becomes(found: _Found) -> str:
+        """What the value turns into at level 1. Says only what is certain."""
+        if found.kept:
+            return "kept as written"
+        if found.type == "BIRTH_DATE":
+            if len(found.results) == 1:
+                return f"the year {next(iter(found.results))}"
+            return "the year only"
+        if found.type == "TERM" and not found.count:
+            return "already replaced, as another finding" if found.already else _NOT_FOUND
+        return code_in_words(found.type)
 
     def begin_table(self, name: str) -> None:
         self._table = name
@@ -498,23 +575,26 @@ class Anonymizer(Transformer):
         return None if reduced is UNREAD else reduced
 
     def _ask_about_column(self, key: tuple, where: str, text: str, options: list[tuple[str, str]]) -> None:
-        self.registry._ask(f"column|{key}", "column", f"{where}: {text}", options, {key[0]}, key)
+        question = self.registry._ask(f"column|{key}", "column", f"{where}: {text}", options, {key[0]}, key)
+        question.columns.add(key)
 
     def _answered(self, columns: list[Column]) -> list[Column]:
         """What the user said about a column counts more than its header."""
         if not self.decisions.columns:
             return columns
-        out = []
-        for i, column in enumerate(columns):
-            answer = self.decisions.columns.get((self.current_file, self._table, i))
-            if answer == "DOB":
-                column = column._replace(category="DOB", dates=False)
-            elif answer == "KEEP_DATES":
-                column = column._replace(category=None, dates=True)
-            elif answer == "KEEP":
-                column = column._replace(category=None, dates=False)
-            out.append(column)
-        return out
+        return [self._answered_one((self.current_file, self._table, i), column) for i, column in enumerate(columns)]
+
+    def _answered_one(self, ref: tuple, column: Column) -> Column:
+        answer = self.decisions.columns.get(ref)
+        if answer == "DOB":
+            return column._replace(category="DOB", dates=False)
+        if answer == "KEEP_DATES":
+            return column._replace(category=None, dates=True)
+        if answer == "KEEP":
+            return column._replace(category=None, role=None, dates=False, keep=True)
+        if answer in ("PERSON", "ID"):  # coded value by value, see row()
+            return column._replace(category=None, role=None, dates=False)
+        return column
 
     def note_removed(self, kind: str, count: int) -> None:
         if not self.collecting:
@@ -592,11 +672,15 @@ class Anonymizer(Transformer):
                     [("ID", "Yes, an ID: replace it"), ("KEEP", "No, a measurement: keep it")],
                 )
         for key, action in self._column_actions.items():
+            profile = self._profiles.get(key)
+            if profile is None:
+                continue
             if action == "PERSON":
-                for value in sorted(self._profiles[key].values):
-                    self.pseudo.token_for("PERSON", value.strip())  # also looked for everywhere else
+                for value in sorted(profile.values):
+                    if not self._kept(finding_key("PERSON", value.strip())):
+                        self.pseudo.token_for("PERSON", value.strip())  # also looked for everywhere else
             if action in ("PERSON", "ID", "DATE"):
-                for value in self._profiles[key].texts | self._profiles[key].values:
+                for value in profile.texts | profile.values:
                     self.columns.add(action, value)
 
     def _check_birth_date_columns(self) -> None:
@@ -766,7 +850,7 @@ class Anonymizer(Transformer):
         gender, academic = _title_before(value, span)
         birth = _birth_date_next_to(value, span, spans)
         person, note = self.registry.person_for_mention(
-            span.text, self.current_file, gender, academic, birth, self._row_person
+            span.text, self.current_file, gender, academic, birth, self._row_person, self._place
         )
         if note and note not in self.warnings:
             self.warnings.append(note)
@@ -800,6 +884,8 @@ class Anonymizer(Transformer):
     def _record_of_row(self, columns: list[Column], values: list) -> Record | None:
         first, last, full, birth, gender = None, None, None, None, None
         ids: set[tuple[str, str]] = set()
+        name_columns: set[tuple] = set()
+        birth_columns: set[tuple] = set()
         for i, value in enumerate(values):
             column = _column_at(columns, i)
             if _blank(value):
@@ -808,6 +894,7 @@ class Anonymizer(Transformer):
             if TOKEN_RE.fullmatch(text):
                 continue  # already anonymised
             if column.category == "PERSON" and column.role in _NAME_ROLES:
+                name_columns.add((self.current_file, self._table, i))
                 if column.role == "first":
                     first = text
                 elif column.role == "last":
@@ -815,7 +902,8 @@ class Anonymizer(Transformer):
                 else:
                     full = text
             elif column.category in ("DOB", "BIRTH_YEAR"):
-                birth = birth or parse_birth_date(value)
+                if birth is None and (birth := parse_birth_date(value)) is not None:
+                    birth_columns.add((self.current_file, self._table, i))
             elif column.category == "ID" and not column.visit_id:
                 ids.add((column.key, text))
             elif column.role == "gender":
@@ -829,7 +917,7 @@ class Anonymizer(Transformer):
         row = None if self.link_by_name else (self.current_file, self._table, self._row_number)
         return Record(
             name_key(canonical), " ".join(canonical.split()), first, last, birth, frozenset(ids), gender, set(),
-            spellings, row,
+            spellings, row, name_columns, birth_columns,
         )
 
     def row(self, columns: list[Column], values: list) -> list:
@@ -839,6 +927,8 @@ class Anonymizer(Transformer):
         columns = _with_name_roles(self._answered(columns))
         if self.collecting:
             self._profile_row(columns, values)
+        else:
+            self.seen_columns[(self.current_file, self._table)] = columns
         record = self._record_of_row(columns, values)
         person: Person | None = None
         if record is not None:
@@ -856,15 +946,26 @@ class Anonymizer(Transformer):
                 if reduced is not UNREAD:
                     out.append(reduced)
                     continue
+            if column.keep:  # the user's decision for the whole column: nothing is looked for in it
+                out.append(value)
+                continue
+            self._place = (self.current_file, self._table, i)
             if column.category == "PERSON" and column.role in _NAME_ROLES and not _blank(value):
                 out.append(self._person_cell(column, value, person))
             elif action in ("PERSON", "ID", "DATE") and not _blank(value):
-                token = self.pseudo.token_for(action, _cell_text(value).strip())
-                self.columns.add(action, _cell_text(value).strip())
-                self._note_found(finding_key(action, _cell_text(value).strip()), _cell_text(value).strip(), "column")
-                self.stats[action] += 1
-                self.tokens.add(token)
-                out.append(token)
+                text = _cell_text(value).strip()
+                self.columns.add(action, text)
+                if TOKEN_RE.fullmatch(text):
+                    out.append(value)
+                elif self._kept(finding_key(action, text)):
+                    self._note_found(finding_key(action, text), text, "column", kept=True)
+                    out.append(value)
+                else:
+                    token = self.pseudo.token_for(action, text)
+                    self._note_found(finding_key(action, text), text, "column")
+                    self.stats[action] += 1
+                    self.tokens.add(token)
+                    out.append(token)
             else:
                 # Above level 1 no exact date stays: one that could not be reduced becomes a code.
                 self._keep_dates = self.level.number == 1 and (
@@ -883,6 +984,7 @@ class Anonymizer(Transformer):
                 out.append(new)
                 self._keep_dates = self._ai_off = False
         self._row_person = None
+        self._place = None
         return out
 
     def _reduced(self, index: int, value, column: Column):
@@ -927,6 +1029,8 @@ class Anonymizer(Transformer):
                 )
             if column.category is not None or column.role == "gender":
                 continue
+            if column.keep:
+                continue
             profile = self._profiles.get(key)
             if profile is None:
                 label = f"{self.current_file}, {self._table + ', ' if self._table else ''}column {_letters(i)}"
@@ -945,7 +1049,11 @@ class Anonymizer(Transformer):
         if category == "PERSON":  # same path as any other name, so that it links to the same person
             span = Span(0, len(value), "PERSON", value.strip(), "pattern")
             if self.collecting:
-                self.registry.observe_mention(self.current_file, span.text, None, False, None)
+                if not self._kept(finding_key("PERSON", span.text)):
+                    self.registry.observe_mention(self.current_file, span.text, None, False, None)
+                return value
+            if self._kept(finding_key("PERSON", span.text)):
+                self._note_found(finding_key("PERSON", span.text), span.text, "column", kept=True)
                 return value
             token = self._token_for_span(value, span, [span])
             self._note_found(finding_key("PERSON", span.text), span.text, "column")
@@ -962,6 +1070,9 @@ class Anonymizer(Transformer):
         if TOKEN_RE.fullmatch(text):
             return text
         self.columns.add("PERSON", text)
+        if self._kept(finding_key("PERSON", text)):  # the row still tells who it is about, the cell stays
+            self._note_found(finding_key("PERSON", text), text, "column", kept=True)
+            return value
         if self.collecting:
             return text
         if person is None:  # e.g. a name without a usable key
@@ -977,22 +1088,30 @@ class Anonymizer(Transformer):
         if _blank(value):
             return value
         if category == "DOB":
-            self.stats["DATE_OF_BIRTH_TO_YEAR"] += 1
             self.columns.add_birth(value)
+            readable = _has_year(value)
+            key = finding_key("BIRTH_DATE", _shown(value)) if readable else finding_key("DATE", str(value))
+            if self._kept(key):  # the full birth date stays
+                self._note_found(key, _shown(value) if readable else " ".join(str(value).split()), "column", kept=True)
+                return value
+            self.stats["DATE_OF_BIRTH_TO_YEAR"] += 1
             year = _year_of(value, self)
-            if isinstance(year, str) and TOKEN_RE.fullmatch(year):  # not readable as a date, so it became a code
+            if not readable:  # not readable as a date, so it became a code
                 self.columns.add("DATE", str(value))
-                self._note_found(finding_key("DATE", str(value)), " ".join(str(value).split()), "column")
+                self._note_found(key, " ".join(str(value).split()), "column")
             else:
-                self._note_found(finding_key("BIRTH_DATE", _shown(value)), _shown(value), "column")
+                self._note_found(key, _shown(value), "column", result=year)
             return year
         if category in CATEGORY_TO_TYPE:
             etype = CATEGORY_TO_TYPE[category]
             text = _cell_text(value)
             if TOKEN_RE.fullmatch(text.strip()):
                 return text
-            token = self.pseudo.token_for(etype, text.strip())
             self.columns.add(etype, text.strip())
+            if self._kept(finding_key(etype, text.strip())):
+                self._note_found(finding_key(etype, text.strip()), text.strip(), "column", kept=True)
+                return value
+            token = self.pseudo.token_for(etype, text.strip())
             self._note_found(finding_key(etype, text.strip()), text.strip(), "column")
             self.stats[etype] += 1
             self.tokens.add(token)
@@ -1076,6 +1195,13 @@ def _ordinary_word(value: str, span: Span) -> bool:
     if span.entity_type != "PERSON" or " " in span.text.strip():
         return False
     return is_ordinary_use(span.text.strip(), value[max(0, span.start - 20) : span.start], value[span.end : span.end + 20])
+
+
+def _has_year(value) -> bool:
+    """Whether _year_of can read a year, or has to replace the whole value."""
+    return isinstance(value, (dt.date, dt.datetime)) or hasattr(value, "year") or bool(
+        re.search(r"\b(19|20)\d{2}\b", str(value))
+    )
 
 
 def _year_of(value, anon: Anonymizer):

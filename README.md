@@ -10,27 +10,55 @@ real values back into the AI's results, using an encrypted key file that never l
 ## The desktop app (Mac)
 
 Open `Privatier-<version>-arm64.dmg`, drag Privatier onto the Applications folder, and open it from there. It needs a
-Mac with an Apple chip (M1 or newer) and macOS 14 or newer. The local AI is part of the app, so it never needs the
-internet. The app is not signed by Apple yet: the first start has to be allowed once in System Settings, Privacy &
-Security ("Open Anyway"). The dmg contains a short note with the steps.
+Mac with an Apple chip (M1 or newer) and macOS 14 or newer. The local AI is part of the app. The app is not signed by
+Apple yet: the first start has to be allowed once in System Settings, Privacy & Security ("Open Anyway"). The dmg
+contains a short note with the steps.
 
-**Protect:** drop a folder, or one or more files, on the window. Privatier reads them and shows what it found. Press
-"Make the copy" and choose a password for the key. Everything else is optional:
+### One folder per project
 
-- **Questions** about unclear cases, one at a time. They can be skipped: what is unclear stays apart.
-- **Protection level**, with the effect of each level shown before anything is written.
-- **What was found:** every value that will be replaced. Switch one off to keep it as written (the name of a method
-  or a hospital you need), or add a word or name that was missed. Values from identifying columns cannot be switched
-  off: those columns are always replaced as a whole. Added words get codes like `TERM_0001`.
-- **What loses detail** at the chosen level, and columns to add to the check.
+The app runs in the macOS App Sandbox. It can only open the folders you add to it, one folder per project, and macOS
+itself keeps it away from every other folder. The app also refuses every network connection itself: macOS cannot do
+that part, because the window is drawn by WebKit, which needs the network permission to start. There is no "allow access to all files" question:
+adding a folder is the permission, and it holds for that folder only.
 
-**Restore:** choose the results the AI gave you, the key file and its password. A restored copy is written next to
-the results.
+Everything Privatier makes goes into one folder named `Privatier` inside the project:
 
-A single file `Studie.xlsx` gives `Studie_pseudonymised/Studie.xlsx` and `Studie_privatier/` next to it. Only the
-chosen files are read: other files in the folder are not used, not even to tell people apart.
+```
+Studie/                          your project (never changed otherwise)
+  Privatier/
+    Key - keep private/          key.vault (encrypted), audit.jsonl, privacy_report.txt: never upload
+    Studie_pseudonymised/        a protected copy → work with this in ChatGPT / Claude
+    Restored/                    results with the real values put back
+```
 
-From the source code, the app starts with `Privatier.command` or `.venv/bin/python -m privatier.app`.
+Privatier never reads its own `Privatier` folder as data, so a copy is not processed twice. The key stays with the
+project: copy the project folder to another Mac and add it there, and the same key and codes are used. If a project
+already has a folder named `Privatier` with your own files in it, the app does not touch it and tells you.
+
+### The window
+
+- **Left, your projects.** "Add folder…" or drop a folder on the window. Removing a project from the list deletes
+  nothing.
+- **Middle, the files.** Untick a file to leave it out. A file that is not ticked is not read at all, not even to
+  tell people apart.
+- **Right, the file as its columns.** A table shows one row per column: what kind it is (name, ID, date of birth,
+  free text, not identifying) and what it becomes. The arrow opens the values of the column. Every value and every
+  column has a tickbox: untick it to keep it as written. The kind of a column can be corrected in place. A letter has
+  no columns and shows one row per kind (names, dates, places). "Add a missed word" adds a word or name; it gets a
+  code like `TERM_0001`. A kept value is your decision: at level 4 it blocks the word "anonymous".
+- **Protection and open points.** When a project has been read, the protection level comes up by itself, with the
+  effect of each level shown before anything is written, followed by the open points (unclear cases). Both stay
+  reachable as buttons at the top right. An open point is also shown as an orange exclamation mark on the column and
+  the value it concerns. Open points can be skipped: what is unclear stays apart.
+- **Make copy…** asks for the key password and writes the copy. **Restore…** takes the results the AI gave you and
+  the password, and writes them with the real values into `Privatier/Restored`.
+
+A project protected with the command line or an earlier version has its key next to the project
+(`Studie_privatier/key.vault`). To keep the same codes in the app, make one copy in the app first (this creates the
+folders), then replace `Studie/Privatier/Key - keep private/key.vault` by the old `key.vault`.
+
+From the source code, the app starts with `Privatier.command` or `.venv/bin/python -m privatier.app`. Started this
+way it is not sandboxed.
 
 ## Privacy levels
 
@@ -78,7 +106,9 @@ patients rather than rows when a patient column exists, and says so when it can 
 > Status: early prototype (v0.1). Test it with fake data first. Automatic detection is never perfect: always
 > look through the anonymised copy before you upload it.
 
-## How it works
+## How it works (command line)
+
+The command line writes next to the folder. The app writes into `Privatier/` inside it, as described above.
 
 ```
 Studie/                  your original folder (never changed)
@@ -184,7 +214,8 @@ What the data does not settle stays apart and becomes a question.
 - **Audit log** (`audit.jsonl`): every run and every file is recorded with SHA-256 fingerprints, counts per
   data type and the codes introduced, but never the sensitive values themselves. Check a file with
   `shasum -a 256 <file>` (Mac) and compare.
-- The original folder is never modified, and existing output is never overwritten.
+- Your original files are never modified, and existing output is never overwritten. The app adds one folder,
+  `Privatier`, to the project and writes only there.
 
 ## Install (Mac, for testing)
 
@@ -243,7 +274,8 @@ privatier anonymize sample_project
 - [ ] Optional date shifting for clinical dates
 - [ ] Add-ons: OCR for scanned PDFs, `.xls`, PowerPoint, optional local LLM double-check
 - [x] Installer for colleagues (dmg, drag to Applications)
-- [x] Review list: keep a value, add a missed word; single files; restore in the app
+- [x] Review list: keep a value, add a missed word; choose files; restore in the app
+- [x] macOS App Sandbox: one folder per project; the app refuses all network connections
 - [ ] Clean-install test on a second Mac
 - [ ] Paste mode: protect and restore a piece of text through the clipboard, without files
 - [ ] Key password in the Mac keychain (Touch ID); remember answers per project
@@ -259,7 +291,7 @@ privatier setup-ai                      # the model must be on this Mac: it is c
 sh packaging/build_app.sh               # dist/Privatier.app, a self-test, then dist/Privatier-<version>-arm64.dmg
 ```
 
-`--app-only` and `--dmg-only` run one half. The build takes about 6 minutes and the app is about 1.8 GB, most of it
+`--app-only` and `--dmg-only` run one half, and `--no-sandbox` builds an app without the sandbox for finding errors. The build takes about 6 minutes and the app is about 1.8 GB, most of it
 the AI. `dist/Privatier.app/Contents/MacOS/Privatier --self-test` checks a finished app without opening a window: it
 makes mock files, protects them with the AI, and restores them. `tools/ui_demo.py` shows the screen in a browser
 with made-up data.
@@ -278,8 +310,10 @@ src/privatier/
   audit.py      audit log
   privacy.py    the four levels, what each does to a value
   review.py     what was found, and what the user decided about it (keep a value, add a word)
+  project.py    the Privatier folder inside a project: key, copies, restored results
   uniqueness.py who can be singled out, what each level would change, when "anonymous" may be said
-  app/          the desktop app: service.py (logic), window.py (the window), ui.html (the screen), selftest.py
+  app/          the desktop app: service.py (logic), window.py (the window), ui.html (the screen), projects.py and
+                access.py (the folders the app may open), selftest.py
   engine.py     folder processing, network blocking
   cli.py        command line
 packaging/      builds Privatier.app and the dmg

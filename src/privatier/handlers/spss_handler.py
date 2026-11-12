@@ -9,6 +9,17 @@ from ..transform import Column, Transformer
 from .base import SameNameMixin
 
 
+def _as_text(value) -> str:
+    if value is None or value is pd.NaT or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    if hasattr(value, "year") and hasattr(value, "day"):
+        text = str(value)
+        return text[:10] if text.endswith(" 00:00:00") else text
+    return str(value)
+
+
 class SpssHandler(SameNameMixin):
     name = "spss"
     extensions = (".sav", ".zsav")
@@ -54,8 +65,12 @@ class SpssHandler(SameNameMixin):
             value_labels.pop(col, None)
             missing_ranges.pop(col, None)
             formats.pop(col, None)
-            if changed.map(lambda v: isinstance(v, str)).any():
-                changed = changed.map(lambda v: "" if v is None or (isinstance(v, float) and pd.isna(v)) else str(v))
+            filled = [v for v in changed if not (v is None or (isinstance(v, float) and pd.isna(v)) or v is pd.NaT)]
+            if filled and all(a is b or a == b for a, b in zip(changed, df[col]) if a is not None and a == a):
+                continue  # every value was kept as it is, on the user's word: the column stays untouched
+            if changed.map(lambda v: isinstance(v, str)).any() or any(hasattr(v, "year") for v in filled):
+                # A value the user kept sits between codes or years: it stays readable, as text.
+                changed = changed.map(_as_text)
             else:
                 changed = pd.to_numeric(changed, errors="coerce")
             df[col] = changed

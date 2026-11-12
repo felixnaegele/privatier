@@ -27,8 +27,10 @@ from .handlers import handler_for
 from .handlers.base import LeftOut
 from .identity import Decisions, Question
 from .privacy import LEVELS
+from .project import marked_folder_above
 from .pseudonyms import KnownValueDetector, Pseudonymizer
-from .review import Finding, Review
+from .outline import build_outline
+from .review import FileOutline, Finding, Review
 from .transform import Anonymizer, Restorer, Transformer
 from .uniqueness import (
     FolderCheck, Table, Verdict, build_plan, check_tables, list_files, read_tables, select_files, verdict,
@@ -76,6 +78,7 @@ class Scan:
     unsupported: list[str]
     used_ai: bool
     findings: list[Finding] = field(default_factory=list)  # real values: for the user's screen only
+    outline: list[FileOutline] = field(default_factory=list)  # each file as its columns, and where the findings sit
 
 
 # --------------------------------------------------------------------------- safety
@@ -164,14 +167,7 @@ def _anonymizer(
     pseudo: Pseudonymizer, detectors: list, link_by_name: bool, plan, decisions, ai_cache, review: Review | None,
     files: list[Path], input_dir: Path,
 ) -> Anonymizer:
-    anon = Anonymizer(pseudo, detectors, link_by_name, plan, decisions, ai_cache, review)
-    if review is not None and review.keep:
-        # A value of an identifying column is never left as written. Which values these are must be known
-        # before the first file is read, so the tables are read once more, without looking for anything.
-        before = Anonymizer(Pseudonymizer(), [], link_by_name, plan, decisions)
-        _first_pass(before, files, input_dir)
-        anon.columns = before.columns
-    return anon
+    return Anonymizer(pseudo, detectors, link_by_name, plan, decisions, ai_cache, review)
 
 
 def scan_folder(
@@ -216,6 +212,7 @@ def scan_folder(
         [str(f.relative_to(input_dir)) for f in files if handler_for(f) is None],
         any(d.name == "ner" for d in detectors),
         anon.findings(),
+        build_outline(anon, tables),
     )
 
 
@@ -240,7 +237,10 @@ def anonymize_folder(
     """`key_dir` is another name for `work_dir`: where the key, the audit log and the report go.
 
     With `only`, just these files of the folder are read and written. The copy and the key may then lie
-    inside the folder, next to the file, as long as none of the chosen files is in them."""
+    inside the folder, next to the file, as long as none of the chosen files is in them.
+
+    The copy and the key may also lie inside the folder when they are in Privatier's own, marked folder
+    there (see project.py), as that folder is never read."""
     settings = LEVELS[level]
     input_dir = Path(input_dir).resolve()
     default_out, default_work = default_paths(input_dir, level)
@@ -254,12 +254,16 @@ def anonymize_folder(
         raise FileExistsError(f"Output folder already exists, refusing to overwrite: {output_dir}")
     files = select_files(input_dir, only)
     if only is None:
-        if output_dir.is_relative_to(input_dir) or work_dir.is_relative_to(input_dir):
-            raise ValueError("Output and key folders must be outside the input folder.")
+        if any(p.is_relative_to(input_dir) and marked_folder_above(p, input_dir) is None for p in (output_dir, work_dir)):
+            raise ValueError(
+                "Output and key folders must be outside the input folder, or inside its marked Privatier folder."
+            )
     elif any(f.resolve().is_relative_to(output_dir) or f.resolve().is_relative_to(work_dir) for f in files):
         raise ValueError("A chosen file lies inside the output or key folder.")
     if work_dir.is_relative_to(output_dir):
         raise ValueError("The key folder must not be inside the anonymised folder.")
+    if output_dir.is_relative_to(work_dir):
+        raise ValueError("The anonymised folder must not be inside the key folder.")
 
     key_path = work_dir / KEY_FILE
     if settings.keeps_key:
@@ -458,7 +462,9 @@ def report_text(summary: Summary, anon: Anonymizer | None = None) -> str:
 def restore_folder(
     input_dir: Path, key_path: Path, password: str, output_dir: Path | None = None, only: list[Path] | None = None
 ) -> Summary:
-    """With `only`, just these files of the folder are restored."""
+    """With `only`, just these files of the folder are restored.
+
+    The restored files may lie inside the input folder only in Privatier's own, marked folder there."""
     input_dir = Path(input_dir).resolve()
     key_path = Path(key_path).resolve()
     output_dir = Path(output_dir or input_dir.with_name(input_dir.name + "_restored")).resolve()
@@ -468,6 +474,10 @@ def restore_folder(
     files = select_files(input_dir, only)
     if only is not None and any(f.resolve().is_relative_to(output_dir) for f in files):
         raise ValueError("A chosen file lies inside the output folder.")
+    if only is None and output_dir.is_relative_to(input_dir) and marked_folder_above(output_dir, input_dir) is None:
+        raise ValueError(
+            "The restored folder must be outside the folder that is restored, or inside its marked Privatier folder."
+        )
     pseudo = Pseudonymizer.from_dict(load_vault(key_path, password))
     restorer = Restorer(pseudo)
     audit = AuditLog(key_path.parent / AUDIT_FILE)

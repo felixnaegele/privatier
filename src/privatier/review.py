@@ -28,6 +28,48 @@ class Finding:
     can_keep: bool
     kept: bool = False  # the user said to leave it, and it is left
     already_replaced: int = 0  # for an added word: places where it is replaced anyway, as another finding
+    becomes: str = ""  # what it turns into at level 1, in plain words: "a name code (PERSON_…)", "the year 1961"
+
+
+_KIND_OF_CODE = {
+    "PERSON": "a name code", "ID": "an ID code", "DATE": "a date code", "ADDRESS": "an address code",
+    "LOCATION": "a place code", "ORG": "an organisation code", "EMAIL": "an e-mail code", "PHONE": "a phone code",
+    "IBAN": "a bank account code", "TERM": "a code",
+}
+
+
+def code_in_words(entity_type: str) -> str:
+    """The kind of code, never a number: which number it gets is only settled when the copy is written."""
+    return f"{_KIND_OF_CODE.get(entity_type, 'a code')} ({entity_type}_…)"
+
+
+@dataclass
+class ColumnOutline:
+    """One column of a table: what it is treated as, and which values in it are replaced."""
+
+    index: int
+    header: str  # as in the file; "(column 3)" when the file gives it no name
+    kind: str  # PERSON, ID, ADDRESS, EMAIL, PHONE, BIRTH_DATE, BIRTH_YEAR, DATE, AGE, SEX, TEXT, PLAIN
+    becomes: str  # at level 1, in plain words
+    values: list[tuple[str, int]]  # (finding id, how often in this column)
+    total_values: int  # cells of the column that are not empty
+    decided: str | None  # what the user said it is: DOB, KEEP_DATES, PERSON, ID, KEEP
+    ref: tuple  # (file, table, column), the key of Decisions.columns
+    choices: list[str] = field(default_factory=list)  # decisions that make sense for this kind
+
+
+@dataclass
+class TableOutline:
+    name: str  # the sheet, or "" for a file that is one table
+    columns: list[ColumnOutline]
+    problem: str | None = None  # why its columns cannot be told apart; what is found in it is under the file's groups
+
+
+@dataclass
+class FileOutline:
+    file: str
+    tables: list[TableOutline]
+    groups: list[tuple[str, list[tuple[str, int]]]]  # outside table columns: (type, [(finding id, how often)])
 
 
 @dataclass

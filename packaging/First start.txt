@@ -15,6 +15,9 @@ Privatier: first start
 From then on Privatier opens like any other app. You do not need to do this again.
 
 Good to know
+- Privatier can only see the folders you choose yourself (with the Choose-folder button or by dropping a folder onto the
+  window). macOS enforces this, so it cannot look at your other files. Choose your folder again if a message says access
+  is missing.
 - Privatier works completely offline. The AI that finds names is part of the app. Your files never leave your Mac.
 - The first start takes a little longer than usual (about half a minute): the AI is loaded.
 - Needs macOS 14 (Sonoma) or newer on a Mac with an Apple chip (M1 or newer).

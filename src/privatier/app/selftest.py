@@ -6,8 +6,11 @@ all file readers, the local AI model, anonymising and restoring. One line per ch
 
 from __future__ import annotations
 
+import errno
 import importlib
 import io
+import os
+import socket
 import shutil
 import sys
 import tempfile
@@ -26,7 +29,7 @@ _MODULES = [
     "gliner", "torch", "transformers", "tokenizers", "sentencepiece", "webview",
     "privatier.engine", "privatier.handlers.csv_handler", "privatier.handlers.excel_handler",
     "privatier.handlers.spss_handler", "privatier.handlers.docx_handler", "privatier.handlers.pdf_handler",
-    "privatier.handlers.text_handler", "privatier.app.service", "privatier.app.window",
+    "privatier.handlers.text_handler", "privatier.app.service", "privatier.app.window", "privatier.app.access",
 ]
 
 
@@ -100,10 +103,79 @@ def _present(text: str, names: list[str]) -> list[str]:
     return [n for n in names if n in text or n.split()[-1] in text]
 
 
+def _point_caches_at_temp() -> Path:
+    """Sandbox-proof: every cache the libraries might write goes to the temp folder (the container's in the sandbox)."""
+    cache = Path(tempfile.mkdtemp(prefix="privatier-selftest-cache-"))
+    # XDG_CACHE_HOME also moves the Hugging Face cache, so it is only redirected inside the app (which sets HF_HUB_CACHE).
+    for var, sub in ((("XDG_CACHE_HOME", "xdg"),) if getattr(sys, "frozen", False) else ()) + (("MPLCONFIGDIR", "mpl"), ("TORCH_HOME", "torch"),
+                     ("PYTORCH_KERNEL_CACHE_PATH", "kernels"), ("NUMBA_CACHE_DIR", "numba")):
+        os.environ[var] = str(cache / sub)
+    return cache
+
+
+def _sandbox_checks(report: _Report) -> None:
+    from privatier.app import access
+
+    sandboxed = access.sandboxed()
+    report.check(f"sandbox: this process is {'' if sandboxed else 'NOT '}sandboxed", True)
+    if not sandboxed:
+        return
+    import pwd
+
+    real_home = Path(pwd.getpwuid(os.getuid()).pw_dir)
+    refused = False
+    for folder in ("Documents", "Desktop", "Downloads"):
+        try:
+            os.listdir(real_home / folder)
+        except PermissionError:
+            refused = True
+        except OSError as exc:
+            refused = exc.errno in (errno.EPERM, errno.EACCES)
+        else:
+            refused = False
+            break
+    report.check("sandbox: reading ~/Documents (outside the container) is refused", refused)
+    try:
+        conn = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        conn.settimeout(3)
+        try:
+            conn.connect(("1.1.1.1", 443))
+            blocked = False
+        finally:
+            conn.close()
+    except OSError as exc:
+        blocked = exc.errno in (errno.EPERM, errno.EACCES)
+    report.check("the app refuses a network connection", blocked)
+    try:
+        access.app_support_dir().relative_to(Path.home())
+        report.check("sandbox: app support folder is inside the container", "Containers" in str(Path.home()))
+    except Exception as exc:
+        report.check("sandbox: app support folder is usable", False, f"{type(exc).__name__}: {exc}")
+
+
+def _info_checks() -> None:
+    """Things that are worth knowing in the sandbox but do not decide pass or fail."""
+    try:
+        import multiprocessing
+
+        multiprocessing.Lock()
+        print("[info] multiprocessing semaphores work", flush=True)
+    except Exception as exc:
+        print(f"[info] multiprocessing semaphores are blocked ({type(exc).__name__})", flush=True)
+    try:
+        import torch
+
+        print(f"[info] torch MPS (Apple GPU) available: {torch.backends.mps.is_available()}", flush=True)
+    except Exception as exc:
+        print(f"[info] torch MPS check failed ({type(exc).__name__})", flush=True)
+
+
 def run() -> int:
     report = _Report()
     work: Path | None = None
+    cache: Path | None = None
     try:
+        cache = _point_caches_at_temp()
         for name in _MODULES:
             try:
                 importlib.import_module(name)
@@ -135,6 +207,9 @@ def run() -> int:
         if sys.platform == "darwin" and getattr(sys, "frozen", False):
             hub = gliner_detector.bundled_hub()
             report.check("AI model is read from inside the app", hub is not None and hub.is_dir(), str(hub))
+
+        _sandbox_checks(report)
+        _info_checks()
 
         work = Path(tempfile.mkdtemp(prefix="privatier-selftest-"))
         source = work / "Selftest"
@@ -172,7 +247,8 @@ def run() -> int:
         traceback.print_exc()
         report.check("self-test ran without an unexpected error", False, "see the error above")
     finally:
-        if work is not None:
-            shutil.rmtree(work, ignore_errors=True)
+        for folder in (work, cache):
+            if folder is not None:
+                shutil.rmtree(folder, ignore_errors=True)
     print("SELF-TEST FAILED" if report.failed else "SELF-TEST PASSED", flush=True)
     return 1 if report.failed else 0

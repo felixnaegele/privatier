@@ -350,11 +350,16 @@ def test_a_mention_in_a_letter_can_be_answered(tmp_path):
 
 
 # --------------------------------------------------------------------------- what the window relies on
-def test_the_app_shows_each_level_and_writes_what_it_showed(study):
+def _opened(study):
+    from privatier.app.projects import ProjectStore
     from privatier.app.service import AppSession
 
-    session = AppSession()
-    result = session.scan(str(study), False)
+    session = AppSession(ProjectStore(study.parent / "app_settings" / "projects.json"))
+    return session, session.open_project(session.add_project([str(study)])["added"], False)
+
+
+def test_the_app_shows_each_level_and_writes_what_it_showed(study):
+    session, result = _opened(study)
     preview = result["preview"]
     assert [preview[str(n)]["worst"]["percent"] for n in (1, 2)] == [100.0, 100.0]
     assert preview["4"]["worst"]["in_small_group"] == 0 and preview["4"]["anonymous"]
@@ -367,19 +372,13 @@ def test_the_app_shows_each_level_and_writes_what_it_showed(study):
 
 
 def test_a_second_export_does_not_overwrite_the_first(study):
-    from privatier.app.service import AppSession
-
-    session = AppSession()
-    session.scan(str(study), False)
+    session, _ = _opened(study)
     first, second = session.export(3, "", {}, [], []), session.export(3, "", {}, [], [])
     assert first["output"] != second["output"]
 
 
 def test_a_ticked_column_counts_in_the_check(study):
-    from privatier.app.service import AppSession
-
-    session = AppSession()
-    result = session.scan(str(study), False)
+    session, result = _opened(study)
     hb = next(c for c in result["columns"] if c["header"] == "Hb")
     assert session.preview({}, [], [])["4"]["anonymous"]
     ticked = session.preview({}, [hb["ref"]], [])["4"]
@@ -388,13 +387,3 @@ def test_a_ticked_column_counts_in_the_check(study):
     done = session.export(4, "", {}, [hb["ref"]], [])
     row = read_xlsx(Path(done["output"]) / "a.xlsx")[0]
     assert row["Hb"] is None and row["Alter"] == "60-69", "the rare value goes, the age it did not cause stays"
-
-
-def test_a_single_file_is_read_on_its_own(tmp_path):
-    from privatier.app.service import AppSession
-
-    file = tmp_path / "a.txt"
-    file.write_text("x", encoding="utf-8")
-    (tmp_path / "b.txt").write_text("Herr Max Müller", encoding="utf-8")
-    scan = AppSession().scan(str(file), False)
-    assert scan["single"] is True and scan["findings"] == []

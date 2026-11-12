@@ -128,15 +128,15 @@ def test_the_list_shows_exactly_what_the_export_replaces(language, request, tmp_
     assert sum(f.count for f in with_code) == len(written)
     births = [f for f in scan.findings if f.type == "BIRTH_DATE"]
     assert len(births) == 3 and sum(f.count for f in births) == summary.counts["DATE_OF_BIRTH_TO_YEAR"]
-    assert all(f.source == "column" and not f.can_keep for f in births)
-    assert all(f.can_keep == (f.source != "column") for f in scan.findings)
+    assert all(f.source == "column" for f in births)
+    assert all(f.can_keep for f in scan.findings), "the user decides for every value"
     assert {f.id for f in scan_folder(folder).findings} == set(ids), "the ids are the same in every scan"
 
 
 def test_where_a_finding_comes_from(german):
     findings = scan_folder(german).findings
     town = by_value(findings, "Sonnental")
-    assert town.source == "column" and not town.can_keep and town.count == 2
+    assert town.source == "column" and town.can_keep and town.count == 2
     assert town.files == ["data.xlsx", "letters/letter.txt"]
     assert by_value(findings, "Anna Berger").source == "column", "a name from the table, wherever it is written"
     assert by_value(findings, "Mueller").source == "column", "also without the umlaut"
@@ -156,13 +156,13 @@ def test_a_kept_value_stays_as_written_and_only_its_number_is_recorded(german, t
     assert all_text(plain.output_dir) == all_text(same.output_dir), "no choices, no change"
 
     findings = scan_folder(german).findings
-    keep = {by_value(findings, v).id for v in ("Klinikum Lindenhof", "Tobias Winter", "Sonnental", "Anna Berger")}
+    keep = {by_value(findings, v).id for v in ("Klinikum Lindenhof", "Tobias Winter")}
     review = Review(keep=keep | {"no such id"})
     summary = anonymize_folder(german, PASSWORD, review=review)
     out = all_text(summary.output_dir)
     assert "im Klinikum Lindenhof operiert" in out
     assert out.count("Dr. Tobias Winter") == 2, "in the letter and in the free-text cell"
-    assert "Sonnental" not in out and "Berger" not in out, "a value of an identifying column is replaced all the same"
+    assert "Sonnental" not in out and "Berger" not in out, "what was not ticked is replaced as before"
     assert (summary.kept_values, summary.kept_places) == (2, 3)
 
     key = load_vault(summary.key_dir / KEY_FILE, PASSWORD)

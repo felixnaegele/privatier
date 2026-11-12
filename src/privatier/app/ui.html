@@ -2,663 +2,563 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- The page may load nothing from anywhere: no network, no other files. Everything it needs is in this file. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval'; style-src 'unsafe-inline'; img-src data:; font-src data:">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Privatier</title>
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #f5f5f7; --card: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --faint: #8e8e93;
-    --line: rgba(60, 60, 67, .14); --line-strong: rgba(60, 60, 67, .26);
-    --fill: rgba(118, 118, 128, .12); --fill-strong: rgba(118, 118, 128, .2); --field: #ffffff;
-    --accent: #007aff; --accent-press: #0068d9; --accent-text: #ffffff; --accent-soft: rgba(0, 122, 255, .1); --accent-line: rgba(0, 122, 255, .32); --ring: rgba(0, 122, 255, .4);
-    --good: #1d7a36; --warn: #9a5200; --bad: #c4201a;
-    --good-bg: rgba(52, 199, 89, .16); --warn-bg: rgba(255, 149, 0, .16); --bad-bg: rgba(255, 59, 48, .12);
-    --bar: rgba(245, 245, 247, .76); --thumb: #ffffff; --knob: #ffffff; --switch-off: rgba(120, 120, 128, .28);
-    --button: #ffffff; --button-press: #f0f0f2; --dim: rgba(0, 0, 0, .28); --over: rgba(236, 244, 255, .9);
-    --shadow: 0 0 0 .5px rgba(0, 0, 0, .08), 0 1px 2px rgba(0, 0, 0, .04), 0 6px 20px rgba(0, 0, 0, .05);
-    --shadow-small: 0 0 0 .5px rgba(0, 0, 0, .12), 0 1px 1.5px rgba(0, 0, 0, .1);
+    --bg: #ffffff; --side: #f2f2f4; --strip: #f8f8f9; --sheet: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --faint: #a3a3a8;
+    --line: rgba(0, 0, 0, .1); --line-soft: rgba(0, 0, 0, .06); --hover: rgba(0, 0, 0, .045); --quiet: rgba(0, 0, 0, .085); --field: #ffffff;
+    --accent: #007aff; --accent-press: #0068d9; --ring: rgba(0, 122, 255, .42); --on-accent: #ffffff;
+    --good: #1d7a36; --warn: #a85a00; --bad: #c4201a;
+    --thumb: #ffffff; --knob: #ffffff; --switch-off: rgba(120, 120, 128, .3); --button: #ffffff; --button-press: #f0f0f2;
+    --dim: rgba(0, 0, 0, .22); --over: rgba(255, 255, 255, .88);
+    --edge: 0 0 0 .5px rgba(0, 0, 0, .16), 0 .5px 1px rgba(0, 0, 0, .12);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #1c1c1e; --card: #2a2a2d; --text: #f5f5f7; --muted: #a1a1a6; --faint: #7c7c82;
-      --line: rgba(255, 255, 255, .1); --line-strong: rgba(255, 255, 255, .2);
-      --fill: rgba(118, 118, 128, .24); --fill-strong: rgba(118, 118, 128, .36); --field: rgba(255, 255, 255, .06);
-      --accent: #0a84ff; --accent-press: #3a9bff; --accent-text: #ffffff; --accent-soft: rgba(10, 132, 255, .18); --accent-line: rgba(10, 132, 255, .45); --ring: rgba(10, 132, 255, .5);
-      --good: #4cd964; --warn: #ffb340; --bad: #ff6961;
-      --good-bg: rgba(48, 209, 88, .18); --warn-bg: rgba(255, 159, 10, .18); --bad-bg: rgba(255, 69, 58, .18);
-      --bar: rgba(28, 28, 30, .72); --thumb: #636366; --knob: #ffffff; --switch-off: rgba(120, 120, 128, .4);
-      --button: #48484b; --button-press: #58585c; --dim: rgba(0, 0, 0, .5); --over: rgba(18, 34, 58, .9);
-      --shadow: 0 0 0 .5px rgba(255, 255, 255, .1), 0 1px 2px rgba(0, 0, 0, .3), 0 6px 20px rgba(0, 0, 0, .25);
-      --shadow-small: 0 0 0 .5px rgba(255, 255, 255, .12), 0 1px 1.5px rgba(0, 0, 0, .4);
+      --bg: #1e1e1f; --side: #29292b; --strip: #242426; --sheet: #2b2b2d; --text: #e9e9eb; --muted: #98989d; --faint: #68686d;
+      --line: rgba(255, 255, 255, .11); --line-soft: rgba(255, 255, 255, .06); --hover: rgba(255, 255, 255, .06); --quiet: rgba(255, 255, 255, .11); --field: rgba(255, 255, 255, .06);
+      --accent: #0a84ff; --accent-press: #3a9bff; --ring: rgba(10, 132, 255, .5); --on-accent: #ffffff;
+      --good: #32d15a; --warn: #ffa733; --bad: #ff6b61;
+      --thumb: #5f5f63; --knob: #ffffff; --switch-off: rgba(120, 120, 128, .45); --button: #46464a; --button-press: #55555a;
+      --dim: rgba(0, 0, 0, .45); --over: rgba(30, 30, 31, .88);
+      --edge: 0 0 0 .5px rgba(255, 255, 255, .16), 0 .5px 1px rgba(0, 0, 0, .4);
     }
   }
 
   * { box-sizing: border-box; }
-  html { background: var(--bg); }
+  html, body { height: 100%; }
   body {
-    margin: 0; min-height: 100vh; display: flex; flex-direction: column; background: var(--bg); color: var(--text);
-    font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
-    -webkit-font-smoothing: antialiased; cursor: default;
-    -webkit-user-select: none; user-select: none; overflow-wrap: anywhere;
+    margin: 0; overflow: hidden; background: var(--bg); color: var(--text);
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased; cursor: default; -webkit-user-select: none; user-select: none;
   }
-  .sel, td, code, input { -webkit-user-select: text; user-select: text; }
-  .sel, td, code { cursor: text; }
+  .sel, code, input { -webkit-user-select: text; user-select: text; }
   .hidden { display: none !important; }
-  h1 { font-size: 24px; line-height: 1.2; font-weight: 700; letter-spacing: -.02em; margin: 0 0 4px; }
-  h2 { font-size: 16px; line-height: 1.3; font-weight: 600; letter-spacing: -.01em; margin: 0; }
-  p { margin: 0 0 8px; }
+  h1, h2, p { margin: 0; }
+  h2 { font-size: 13px; font-weight: 600; }
   .muted { color: var(--muted); }
-  .small { font-size: 12.5px; }
-  code { font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace; word-break: break-all; }
+  .small { font-size: 11.5px; }
+  .mono, code { font: 11.5px/1.4 ui-monospace, "SF Mono", Menlo, monospace; }
+  code { word-break: break-all; }
+  .cut { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
   :focus { outline: none; }
   :focus-visible { outline: 3px solid var(--ring); outline-offset: 1px; }
-  .icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+  .icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-  /* ------------------------------------------------------------ top bar, bottom bar */
-  .bar {
-    position: sticky; top: 0; z-index: 10; height: 52px; padding: 0 20px; flex: none;
-    display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
-    background: var(--bar); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
-    border-bottom: .5px solid var(--line-strong);
-  }
-  .bar-name { font-size: 15px; font-weight: 600; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
-  .bar-name .icon { width: 18px; height: 18px; color: var(--accent); }
-  .bar-side { text-align: right; font-size: 12px; color: var(--faint); }
-  main { flex: 1; width: 100%; max-width: 820px; margin: 0 auto; padding: 28px 24px 40px; }
-  main > section:not(.hidden) { animation: appear .22s ease-out; }
-  @keyframes appear { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-  .actionbar {
-    position: sticky; bottom: 0; z-index: 9; flex: none;
-    background: var(--bar); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
-    border-top: .5px solid var(--line-strong);
-  }
-  .actionbar-in { max-width: 820px; margin: 0 auto; padding: 10px 24px; display: flex; align-items: center; gap: 16px; }
-  .actionbar .line { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); }
+  /* ------------------------------------------------------------ the window */
+  .window { height: 100%; display: grid; grid-template-columns: 200px minmax(0, 1fr); }
+  .sidebar { background: var(--side); border-right: .5px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
+  .toolbar { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: .5px solid var(--line); }
+  .toolbar .titles { flex: 1; min-width: 0; }
+  .toolbar .title { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+  .progress { position: absolute; left: 0; right: 0; top: 52px; height: 2px; overflow: hidden; z-index: 3; }
+  .progress::before { content: ""; position: absolute; top: 0; bottom: 0; width: 30%; background: var(--accent); animation: slide 1.3s ease-in-out infinite; }
+  @keyframes slide { from { left: -30%; } to { left: 100%; } }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .panes { flex: 1; min-height: 0; display: grid; grid-template-columns: 250px minmax(0, 1fr); }
+  .files { border-right: .5px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .blank { flex: 1; display: grid; place-content: center; justify-items: center; text-align: center; padding: 32px; gap: 8px; }
+  .blank h1 { font-size: 15px; font-weight: 600; }
+  .blank p { max-width: 380px; color: var(--muted); }
+  .blank .btn { margin-top: 8px; }
+  .opening { flex: 1; display: grid; place-content: center; justify-items: center; gap: 8px; text-align: center; color: var(--muted); }
+  .opening .st-head { color: var(--text); font-weight: 500; }
+  .opening .st-sub { min-height: 16px; font-size: 11.5px; }
 
-  /* ------------------------------------------------------------ segmented control */
-  .seg { position: relative; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 2px; border-radius: 9px; background: var(--fill); }
-  .seg-thumb {
-    position: absolute; top: 2px; bottom: 2px; left: 2px; width: calc((100% - 4px) / var(--n, 2));
-    transform: translateX(calc(var(--i, 0) * 100%)); border-radius: 7px; background: var(--thumb); box-shadow: var(--shadow-small);
-    transition: transform .2s ease;
-  }
-  .seg-item {
-    position: relative; z-index: 1; font: inherit; font-size: 13px; line-height: 1.25; color: var(--text); background: none; border: 0;
-    border-radius: 7px; padding: 5px 16px; min-height: 26px; cursor: default; transition: opacity .15s;
-  }
-  .seg-item.on { font-weight: 600; }
-  .seg-item:not(.on):hover { opacity: .65; }
-  .seg-item:disabled { opacity: .4; }
-  .seg-note { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
-  #tabs .seg-item { min-width: 96px; }
-  #levels .seg-item { padding: 7px 6px; min-height: 44px; }
-
-  /* ------------------------------------------------------------ buttons and fields */
+  /* ------------------------------------------------------------ buttons, fields, small controls */
   .btn {
-    font: inherit; font-size: 13px; color: var(--text); background: var(--button); border: 0; border-radius: 8px; padding: 5px 13px; min-height: 28px;
-    box-shadow: var(--shadow-small); cursor: default; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    transition: background-color .15s, opacity .15s, transform .15s;
+    font: inherit; color: var(--text); background: var(--button); border: 0; border-radius: 6px; padding: 3px 12px; min-height: 24px;
+    box-shadow: var(--edge); cursor: default; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap;
+    transition: background-color .15s, opacity .15s;
   }
   .btn:hover { background: var(--button-press); }
-  .btn:active { transform: scale(.98); }
-  .btn.primary { background: var(--accent); color: var(--accent-text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
-  .btn.primary:hover, .btn.primary:active { background: var(--accent-press); }
-  .btn.large { font-size: 14px; padding: 8px 20px; min-height: 36px; border-radius: 10px; }
-  .btn.chosen { background: var(--accent); color: var(--accent-text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .18); }
-  .btn.plain { background: none; box-shadow: none; color: var(--accent); padding: 4px 6px; }
-  .btn.plain:hover { background: var(--fill); }
-  .btn:disabled { opacity: .45; pointer-events: none; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); box-shadow: 0 .5px 1px rgba(0, 0, 0, .25); }
+  .btn.primary:hover { background: var(--accent-press); }
+  .btn.chosen { background: var(--accent); color: var(--on-accent); box-shadow: 0 .5px 1px rgba(0, 0, 0, .25); }
+  .btn.bare { background: none; box-shadow: none; padding: 3px 8px; }
+  .btn.bare:hover { background: var(--hover); }
+  .btn:disabled { opacity: .4; pointer-events: none; }
+  .toolbar .btn { min-height: 28px; }
+  .toolbar .btn .icon { color: var(--muted); }
+  .toolbar .btn.open { color: var(--warn); }
+  .toolbar .btn.open .icon { color: var(--warn); }
+  .toolbar .sep { width: .5px; height: 18px; background: var(--line); margin: 0 4px; flex: none; }
+  .link { font: inherit; color: var(--accent); background: none; border: 0; border-radius: 4px; padding: 0 2px; cursor: default; }
+  .link:hover { text-decoration: underline; }
   input[type=password], input[type=text], input[type=search] {
-    font: inherit; font-size: 13px; color: var(--text); background: var(--field); border: 0; border-radius: 8px; padding: 6px 10px; min-height: 30px;
-    width: 260px; max-width: 100%; box-shadow: inset 0 0 0 1px var(--line-strong); -webkit-appearance: none; appearance: none;
-    transition: box-shadow .15s;
+    font: inherit; color: var(--text); background: var(--field); border: 0; border-radius: 6px; padding: 3px 8px; min-height: 24px; width: 200px; max-width: 100%;
+    box-shadow: inset 0 0 0 .5px var(--line), inset 0 0 0 1px var(--line-soft), 0 .5px 0 var(--line-soft); -webkit-appearance: none; appearance: none; transition: box-shadow .15s;
   }
   input[type=password]:focus, input[type=text]:focus, input[type=search]:focus { outline: none; box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--ring); }
   input::placeholder { color: var(--faint); }
   input[type=search]::-webkit-search-decoration { -webkit-appearance: none; }
-  .search { position: relative; display: inline-block; max-width: 100%; }
-  .search .icon { position: absolute; left: 9px; top: 50%; margin-top: -7px; width: 14px; height: 14px; color: var(--faint); pointer-events: none; }
-  .search input { padding-left: 29px; }
-  input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
-  .pw { position: relative; display: block; }
-  .pw input { width: 100%; min-height: 34px; padding-right: 38px; }
-  .eye { position: absolute; right: 4px; top: 50%; margin-top: -13px; width: 28px; height: 26px; border: 0; border-radius: 6px; background: none; color: var(--muted); display: grid; place-items: center; padding: 0; cursor: default; }
-  .eye:hover { background: var(--fill); color: var(--text); }
-
-  /* ------------------------------------------------------------ switch */
-  .switch { position: relative; display: inline-block; width: 38px; height: 22px; flex: none; }
-  .switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: default; z-index: 1; }
-  .switch .track { position: absolute; inset: 0; border-radius: 11px; background: var(--switch-off); transition: background-color .2s; }
-  .switch .track::after {
-    content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--knob);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, .25), 0 0 0 .5px rgba(0, 0, 0, .06); transition: transform .2s ease;
-  }
+  input[type=checkbox] { accent-color: var(--accent); width: 14px; height: 14px; margin: 0; flex: none; }
+  .search { position: relative; display: inline-block; }
+  .search .icon { position: absolute; left: 7px; top: 50%; margin-top: -6px; width: 12px; height: 12px; color: var(--faint); pointer-events: none; }
+  .search input { padding-left: 24px; }
+  .switch { position: relative; display: inline-block; width: 26px; height: 15px; flex: none; }
+  .switch input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; z-index: 1; }
+  .switch .track { position: absolute; inset: 0; border-radius: 8px; background: var(--switch-off); transition: background-color .2s; }
+  .switch .track::after { content: ""; position: absolute; top: 1.5px; left: 1.5px; width: 12px; height: 12px; border-radius: 50%; background: var(--knob); box-shadow: 0 .5px 1.5px rgba(0, 0, 0, .3); transition: transform .2s ease; }
   .switch input:checked + .track { background: var(--accent); }
-  .switch input:checked + .track::after { transform: translateX(16px); }
+  .switch input:checked + .track::after { transform: translateX(11px); }
   .switch input:focus-visible + .track { outline: 3px solid var(--ring); outline-offset: 1px; }
   .switch input:disabled + .track { opacity: .45; }
-
-  /* ------------------------------------------------------------ cards */
-  .card { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); padding: 20px 22px; margin-bottom: 16px; }
-  .rule { border: 0; border-top: .5px solid var(--line-strong); margin: 16px 0; }
-  .message { padding: 10px 12px; border-radius: 10px; margin: 12px 0 0; font-size: 13px; -webkit-user-select: text; user-select: text; }
-  .message strong { display: block; font-weight: 600; }
-  .message.bad { background: var(--bad-bg); color: var(--bad); }
-  .message.warn { background: var(--warn-bg); color: var(--warn); }
-  .pill { display: inline-block; padding: 3px 11px; border-radius: 99px; font-size: 12.5px; font-weight: 600; }
-  .pill.good { background: var(--good-bg); color: var(--good); }
-  .pill.warn { background: var(--warn-bg); color: var(--warn); }
-  ul.tight { margin: 8px 0 0; padding-left: 18px; }
-  ul.tight li { margin-bottom: 2px; -webkit-user-select: text; user-select: text; }
-  .row-end { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: flex-end; }
-  .spread { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
-  .scroll { max-height: 280px; overflow: auto; padding-right: 12px; }
-
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 7px 12px 7px 0; border-bottom: .5px solid var(--line-strong); vertical-align: top; }
-  tr:last-child td { border-bottom: 0; }
-  th { font-weight: 500; color: var(--muted); font-size: 12px; position: sticky; top: 0; background: var(--card); }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  th:last-child, td:last-child { padding-right: 0; }
-
-  details > summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--accent); border-radius: 6px; padding: 2px 4px; margin-left: -4px; }
-  details > summary::-webkit-details-marker { display: none; }
-  details > summary::before, .chevron {
-    content: ""; display: inline-block; width: 7px; height: 7px; border-right: 1.8px solid currentColor; border-bottom: 1.8px solid currentColor;
-    transform: rotate(-45deg); transition: transform .18s ease; flex: none; margin: 0 3px 0 1px;
-  }
-  details[open] > summary::before, .open > .chevron, .sect.open > .sect-head > .chevron { transform: rotate(45deg); }
-  details[open] > summary { margin-bottom: 10px; }
-
-  /* ------------------------------------------------------------ start and restore */
-  .hero { text-align: center; margin: 8px 0 22px; }
-  .hero p { max-width: 520px; margin: 0 auto; }
-  .drop { border: 1.5px dashed var(--line-strong); border-radius: 14px; padding: 44px 24px; text-align: center; background: var(--card); margin-bottom: 16px; }
-  .drop-icon { width: 52px; height: 52px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; margin: 0 auto 14px; }
-  .drop-icon .icon { width: 26px; height: 26px; }
-  .drop .big { font-size: 19px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 4px; }
-  .drop .buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 18px; }
-  .setting { display: flex; align-items: center; gap: 16px; }
-  .setting > div { flex: 1; min-width: 0; }
-  .setting strong { font-weight: 600; }
-  .assure { display: flex; align-items: center; justify-content: center; gap: 7px; color: var(--muted); font-size: 12.5px; margin-top: 18px; }
-  .assure .icon { color: var(--good); }
-  .dropover {
-    position: fixed; inset: 0; z-index: 40; pointer-events: none; background: var(--over); opacity: 0; visibility: hidden;
-    transition: opacity .15s ease, visibility 0s .15s;
-  }
-  .dropover.on { opacity: 1; visibility: visible; transition-delay: 0s; }
-  .dropover-in { position: absolute; inset: 14px; border: 2.5px dashed var(--accent); border-radius: 18px; display: grid; place-content: center; justify-items: center; gap: 12px; color: var(--accent); font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
-  .dropover .icon { width: 44px; height: 44px; }
-
-  /* ------------------------------------------------------------ busy */
-  .busy-card { text-align: center; padding: 72px 20px; }
-  .spinner { width: 30px; height: 30px; border-radius: 50%; border: 3px solid var(--fill-strong); border-top-color: var(--accent); animation: spin .9s linear infinite; margin: 0 auto 16px; }
-  .spinner.mini { width: 14px; height: 14px; border-width: 2px; margin: 0; flex: none; }
+  .spinner { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--quiet); border-top-color: var(--muted); animation: spin .8s linear infinite; flex: none; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  @keyframes pulse { 50% { opacity: .35; } }
-  @keyframes swap { from { opacity: 0; } to { opacity: 1; } }
-  .swap { animation: swap .3s ease; }
-  #busy-text { font-size: 16px; font-weight: 600; -webkit-user-select: text; user-select: text; }
-  #busy-sub { min-height: 20px; margin-top: 2px; color: var(--muted); -webkit-user-select: text; user-select: text; }
+  .note { margin-top: 8px; -webkit-user-select: text; user-select: text; }
+  .note strong { font-weight: 600; margin-right: 4px; }
+  .note.bad { color: var(--bad); }
+  .note.warn { color: var(--warn); }
+  .good-text { color: var(--good); } .warn-text { color: var(--warn); }
 
-  /* ------------------------------------------------------------ review: summary and questions */
-  .lead { display: flex; align-items: center; gap: 14px; }
-  .lead-mark { width: 40px; height: 40px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; flex: none; }
-  .lead-mark.good { background: var(--good-bg); color: var(--good); }
-  .lead-mark .icon { width: 22px; height: 22px; }
-  .lead h2 { font-size: 19px; letter-spacing: -.015em; }
-  .lead p { margin: 2px 0 0; color: var(--muted); -webkit-user-select: text; user-select: text; }
-  .type-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
-  .tchip { font: inherit; font-size: 12.5px; color: var(--text); background: var(--fill); border: 0; border-radius: 99px; padding: 4px 11px; cursor: default; transition: background-color .15s; }
-  .tchip:hover { background: var(--fill-strong); }
-  .tchip span { color: var(--muted); margin-left: 5px; font-variant-numeric: tabular-nums; }
-  .quiet-line { display: flex; align-items: center; gap: 7px; margin-top: 14px; font-size: 13px; color: var(--muted); }
-  .quiet-line .icon { color: var(--good); }
-  .card.attention { background: linear-gradient(var(--accent-soft), var(--accent-soft)), var(--card); box-shadow: inset 0 0 0 1px var(--accent-line), var(--shadow); }
-  .q-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  .q-where { margin: 14px 0 4px; }
-  .question-text { font-size: 15px; -webkit-user-select: text; user-select: text; }
-  .options { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 16px; }
-  .nav { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-  .q-done { display: flex; align-items: center; gap: 9px; font-weight: 600; color: var(--good); }
-  .q-done .btn { margin-left: auto; font-weight: 400; }
+  /* ------------------------------------------------------------ sidebar */
+  .side-label { font-size: 11px; font-weight: 600; color: var(--muted); padding: 16px 16px 4px; }
+  .side-list { flex: 1; min-height: 0; overflow-y: auto; padding: 0 8px; }
+  .prow { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 4px 0 8px; border-radius: 6px; }
+  .prow .icon { color: var(--accent); }
+  .prow.on { background: var(--quiet); }
+  .prow.off { color: var(--faint); }
+  .prow.off .icon { color: var(--faint); }
+  .prow .warn-icon { color: var(--warn); width: 13px; height: 13px; }
+  .prow .name { flex: 1; }
+  .prow .more { width: 20px; height: 20px; border: 0; border-radius: 4px; background: none; color: var(--muted); display: grid; place-items: center; padding: 0; opacity: 0; }
+  .prow:hover .more, .prow.on .more, .prow .more:focus-visible { opacity: 1; }
+  .prow .more:hover { background: var(--hover); }
+  .side-add { font: inherit; color: var(--muted); background: none; border: 0; border-radius: 6px; display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; margin: 4px 8px 8px; text-align: left; }
+  .side-add:hover { background: var(--hover); color: var(--text); }
+  .side-hint { font-size: 11px; color: var(--muted); padding: 0 16px 10px; margin-top: -4px; }
+  .side-error { padding: 0 16px 10px; margin: 0; font-size: 11.5px; }
+  .side-foot { border-top: .5px solid var(--line); padding: 12px 16px; font-size: 11.5px; color: var(--muted); }
+  .side-foot .row { display: flex; align-items: center; gap: 8px; color: var(--text); }
+  .side-foot .row > span:first-child { flex: 1; }
+  .side-foot .quiet { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+  .side-foot .quiet .icon { width: 12px; height: 12px; }
+  .menu { position: fixed; z-index: 50; min-width: 160px; padding: 4px; border-radius: 6px; background: var(--sheet); box-shadow: 0 0 0 .5px var(--line), 0 8px 24px rgba(0, 0, 0, .22); }
+  .menu button { font: inherit; color: var(--text); background: none; border: 0; border-radius: 4px; width: 100%; text-align: left; padding: 3px 8px; }
+  .menu button:hover, .menu button:focus-visible { background: var(--accent); color: var(--on-accent); outline: none; }
 
-  /* ------------------------------------------------------------ review: sections that open */
-  .card.rows { padding: 0; overflow: hidden; }
-  .sect + .sect { border-top: .5px solid var(--line-strong); }
-  .sect-head { font: inherit; color: inherit; width: 100%; display: flex; align-items: center; gap: 12px; padding: 15px 22px; background: none; border: 0; text-align: left; cursor: default; transition: background-color .15s; }
-  .sect-head:hover { background: var(--fill); }
-  .sect-head:focus-visible, .group-head:focus-visible { outline-offset: -3px; }
-  .sect-title { font-size: 15px; font-weight: 600; white-space: nowrap; }
-  .sect-state { margin-left: auto; text-align: right; font-size: 13px; color: var(--muted); }
-  .sect-head .chevron { color: var(--faint); }
-  .sect-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .24s ease; }
-  .sect.open > .sect-body { grid-template-rows: 1fr; }
-  .sect-inner { overflow: hidden; min-height: 0; visibility: hidden; transition: visibility 0s .24s; }
-  .sect.open > .sect-body > .sect-inner { visibility: visible; transition-delay: 0s; }
-  .sect-pad { padding: 4px 22px 22px; }
+  /* ------------------------------------------------------------ file list */
+  .file-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px; }
+  .frow { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 6px; }
+  .frow .icon { color: var(--muted); }
+  .frow .mid { flex: 1; min-width: 0; display: flex; }
+  .mid-a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .mid-b { white-space: pre; flex: none; }
+  .frow .num { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+  .frow .state { font-size: 11.5px; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; }
+  .frow .state .icon { width: 13px; height: 13px; color: inherit; }
+  .frow .state.done, .frow .state.done .icon { color: var(--faint); }
+  .frow.dim .mid, .frow.dim .icon { color: var(--faint); }
+  .frow.on { background: var(--accent); color: var(--on-accent); }
+  .frow.on .icon, .frow.on .num, .frow.on .state, .frow.on .mid { color: var(--on-accent); }
+  .frow.on input { accent-color: #ffffff; }
+  .frow.all { font-weight: 500; margin-bottom: 4px; }
+  .frow .gap { width: 14px; flex: none; }
 
-  .effect { display: grid; grid-template-columns: 190px 1fr; gap: 22px; align-items: start; margin-top: 16px; padding-top: 16px; border-top: .5px solid var(--line-strong); }
-  .number { font-size: 52px; font-weight: 700; line-height: 1; letter-spacing: -.03em; font-variant-numeric: tabular-nums; margin-bottom: 6px; -webkit-user-select: text; user-select: text; }
-  .check-line { display: flex; gap: 8px; align-items: flex-start; padding: 4px 0; }
-  .check-line input { margin-top: 2px; flex: none; }
-
-  .tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 12px 0 10px; }
-  .groups { border-radius: 10px; box-shadow: inset 0 0 0 .5px var(--line-strong); overflow: hidden; }
-  .group + .group { border-top: .5px solid var(--line-strong); }
-  .group-head { font: inherit; color: inherit; width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 14px; background: none; border: 0; text-align: left; cursor: default; transition: background-color .15s; }
-  .group-head:hover { background: var(--fill); }
-  .group-head .chevron { color: var(--faint); }
-  .group-name { font-weight: 600; }
-  .group-count { color: var(--muted); font-variant-numeric: tabular-nums; }
-  .group-kept { margin-left: auto; font-size: 12px; color: var(--warn); background: var(--warn-bg); padding: 1px 8px; border-radius: 99px; }
-  .group-body { border-top: .5px solid var(--line); padding: 2px 14px 6px 31px; }
-  .frow { display: grid; grid-template-columns: minmax(0, 1fr) 118px 46px 62px 158px; align-items: center; gap: 10px; min-height: 34px; border-bottom: .5px solid var(--line); }
-  .frow.last { border-bottom: 0; }
-  .fval { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .frow.kept .fval { color: var(--warn); }
-  .fsrc, .fcount { font-size: 12px; color: var(--muted); white-space: nowrap; }
-  .fcount { text-align: right; font-variant-numeric: tabular-nums; }
-  .ffiles { font: inherit; font-size: 12px; color: var(--accent); background: none; border: 0; border-radius: 5px; padding: 2px 4px; text-align: right; white-space: nowrap; cursor: default; }
-  .ffiles:hover { background: var(--fill); }
-  .fact { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
-  .fact .icon { width: 13px; height: 13px; color: var(--faint); }
-  .ffilelist { grid-column: 1 / -1; font-size: 12px; color: var(--muted); padding: 0 0 8px; -webkit-user-select: text; user-select: text; }
-  .more { margin: 6px 0 2px; }
-  .empty { padding: 14px; color: var(--muted); text-align: center; }
-  .add-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-  .chip { display: inline-flex; align-items: center; gap: 2px; background: var(--fill); border-radius: 99px; padding: 2px 3px 2px 11px; font-size: 13px; max-width: 100%; }
-  .chip span { -webkit-user-select: text; user-select: text; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .chip .chip-note { color: var(--muted); font-size: 12px; margin-left: 6px; -webkit-user-select: none; user-select: none; }
-  .chip button { width: 20px; height: 20px; border-radius: 50%; border: 0; background: none; color: var(--muted); display: grid; place-items: center; padding: 0; cursor: default; flex: none; }
-  .chip button:hover { background: var(--fill-strong); color: var(--text); }
-  .chip .icon { width: 10px; height: 10px; stroke-width: 2.4; }
-
-  /* ------------------------------------------------------------ the sheet */
-  .sheet-wrap { position: fixed; inset: 0; z-index: 30; background: var(--dim); display: flex; justify-content: center; align-items: flex-start; padding-top: 52px; animation: swap .2s ease-out; }
-  .sheet {
-    width: 440px; max-width: calc(100% - 32px); max-height: calc(100vh - 72px); overflow: auto; background: var(--card); border-radius: 0 0 14px 14px;
-    box-shadow: 0 0 0 .5px var(--line-strong), 0 22px 60px rgba(0, 0, 0, .35); padding: 22px 24px 20px; animation: sheet-in .26s cubic-bezier(.2, .8, .2, 1);
+  /* ------------------------------------------------------------ what was found */
+  .detail-head { height: 40px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 16px; }
+  .detail-head .line { flex: 1; }
+  .table-wrap { flex: 1; min-height: 0; overflow-y: auto; border-top: .5px solid var(--line); }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th { position: sticky; top: 0; z-index: 1; background: var(--bg); text-align: left; font-size: 11px; font-weight: 500; color: var(--muted); height: 24px; padding: 0 8px; box-shadow: inset 0 -.5px 0 var(--line); }
+  td { height: 28px; padding: 0 8px; border-bottom: .5px solid var(--line-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  th:first-child, td:first-child { padding-left: 16px; }
+  th:last-child, td:last-child { padding-right: 16px; }
+  .outline-head, .orow { display: grid; grid-template-columns: minmax(0, 1fr) 124px 176px 50px 56px; align-items: center; padding: 0 10px 0 8px; }
+  .outline-head { position: sticky; top: 0; z-index: 1; background: var(--bg); height: 24px; font-size: 11px; font-weight: 500; color: var(--muted); box-shadow: inset 0 -.5px 0 var(--line); }
+  .orow { min-height: 28px; border-bottom: .5px solid var(--line-soft); }
+  .outline-head > div, .orow > div { padding: 0 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .orow .c-name { display: flex; align-items: center; gap: 4px; padding-left: calc(6px + var(--depth, 0) * 18px); }
+  .orow .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; -webkit-user-select: text; user-select: text; }
+  .orow .c-name > .icon { color: var(--muted); }
+  .orow.file .label { font-weight: 500; }
+  .orow.idle .label, .orow.kept .label { color: var(--muted); }
+  .orow.has-open .label { color: var(--warn); }
+  .orow .c-kind, .orow .c-becomes { color: var(--muted); }
+  .orow .c-becomes.mono { color: var(--text); }
+  .orow .c-found, .outline-head .c-found { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+  .orow .c-replace, .outline-head .c-replace { text-align: center; overflow: visible; }
+  .orow .c-kind.pick { overflow: visible; }
+  .tri { width: 16px; height: 16px; border: 0; background: none; border-radius: 4px; display: grid; place-items: center; padding: 0; color: var(--muted); flex: none; }
+  .tri::before { content: ""; border-left: 6px solid currentColor; border-top: 4px solid transparent; border-bottom: 4px solid transparent; transition: transform .15s ease; }
+  .tri.open::before { transform: rotate(90deg); }
+  .tri:hover { background: var(--hover); }
+  .tri-gap { width: 16px; flex: none; }
+  .mark { width: 18px; height: 18px; border: 0; background: none; border-radius: 4px; padding: 0; display: grid; place-items: center; color: var(--warn); flex: none; }
+  .mark:hover { background: var(--hover); }
+  .mark.done { color: var(--faint); }
+  .mark .icon { width: 14px; height: 14px; }
+  .osect { height: 28px; display: flex; align-items: flex-end; padding: 0 16px 5px calc(20px + var(--depth, 0) * 18px); font-size: 11px; font-weight: 600; color: var(--muted); border-bottom: .5px solid var(--line-soft); }
+  .omore { min-height: 28px; display: flex; align-items: center; padding-left: calc(34px + var(--depth, 0) * 18px); border-bottom: .5px solid var(--line-soft); }
+  select.kind {
+    font: inherit; font-size: 12px; color: var(--text); background-color: var(--button); border: 0; border-radius: 5px; box-shadow: var(--edge); height: 20px; padding: 0 20px 0 7px; max-width: 100%;
+    -webkit-appearance: none; appearance: none; background-repeat: no-repeat; background-position: right 4px center; background-size: 12px 12px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M5 6.5L8 3.5l3 3M5 9.5l3 3 3-3' fill='none' stroke='%238e8e93' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   }
-  @keyframes sheet-in { from { transform: translateY(-28px); opacity: 0; } to { transform: none; opacity: 1; } }
-  .sheet h2 { font-size: 17px; margin-bottom: 6px; }
-  .sheet .fields { display: grid; gap: 10px; margin-top: 14px; }
+  select.kind:disabled { opacity: .5; }
+  .popover { position: fixed; z-index: 45; width: 320px; max-width: calc(100% - 16px); padding: 12px 14px; border-radius: 8px; background: var(--sheet); box-shadow: 0 0 0 .5px var(--line), 0 10px 30px rgba(0, 0, 0, .25); }
+  .popover .q + .q { margin-top: 12px; padding-top: 12px; border-top: .5px solid var(--line); }
+  .popover .q-say { -webkit-user-select: text; user-select: text; }
+  .popover .options, .point .options { margin: 8px 0 0; gap: 6px; }
+  .popover .hint { margin-top: 10px; font-size: 11.5px; color: var(--muted); }
+  .pane-note { padding: 24px 16px; color: var(--muted); text-align: center; }
+  .add-row { flex: none; border-top: .5px solid var(--line); padding: 8px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .add-row input { width: 170px; }
+  .token { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 2px 0 8px; border-radius: 5px; box-shadow: inset 0 0 0 .5px var(--line); background: var(--hover); max-width: 100%; }
+  .token .what { color: var(--muted); font-size: 11.5px; }
+  .token button { width: 18px; height: 18px; border: 0; border-radius: 4px; background: none; color: var(--muted); display: grid; place-items: center; padding: 0; }
+  .token button:hover { background: var(--quiet); color: var(--text); }
+  .token .icon { width: 9px; height: 9px; stroke-width: 2; }
 
-  /* ------------------------------------------------------------ done and restored */
-  .done-head { display: flex; align-items: center; gap: 14px; margin-bottom: 6px; }
-  .done-head h1 { margin: 0; font-size: 22px; }
-  .next-title { font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 20px 0 8px; }
-  ol.next { list-style: none; margin: 0; padding: 0; counter-reset: next; }
-  ol.next li { counter-increment: next; display: flex; gap: 12px; align-items: baseline; padding: 5px 0; -webkit-user-select: text; user-select: text; }
-  ol.next li::before { content: counter(next); width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 12px; font-weight: 700; display: grid; place-items: center; flex: none; }
-  .paths { border-radius: 10px; background: var(--fill); padding: 4px 14px; margin-top: 14px; }
-  .path-row { padding: 9px 0; }
-  .path-row + .path-row { border-top: .5px solid var(--line-strong); }
-  .path-row .what { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
-  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 14px; }
-  .stat { background: var(--fill); border-radius: 10px; padding: 12px 14px; }
-  .stat .value { font-size: 26px; font-weight: 700; letter-spacing: -.02em; line-height: 1.1; font-variant-numeric: tabular-nums; -webkit-user-select: text; user-select: text; }
-  .stat .what { font-size: 12px; color: var(--muted); margin-top: 2px; }
-  .form-row { display: grid; grid-template-columns: 22px 120px minmax(0, 1fr); gap: 12px; align-items: center; padding: 16px 0; border-top: .5px solid var(--line-strong); }
-  .form-row:first-of-type { border-top: 0; padding-top: 0; }
-  .form-row .name { font-weight: 600; }
-  .form-row .value { display: flex; align-items: center; gap: 12px; min-width: 0; }
-  .form-row .value > .grow { flex: 1; min-width: 0; }
-  .dot { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-strong); display: grid; place-items: center; color: transparent; transition: background-color .2s, color .2s, box-shadow .2s; }
-  .dot .icon { width: 13px; height: 13px; stroke-width: 2.6; }
-  .dot.ok { background: var(--good-bg); color: var(--good); box-shadow: none; }
-  .chosen-item { display: flex; align-items: center; gap: 10px; min-width: 0; }
-  .chosen-item .icon { width: 20px; height: 20px; color: var(--accent); }
-  .chosen-item strong { font-weight: 600; -webkit-user-select: text; user-select: text; }
-  #restore-drop { padding: 26px 24px; margin-bottom: 0; background: none; }
+  .swap { animation: swap .3s ease; }
+  @keyframes swap { from { opacity: 0; } to { opacity: 1; } }
 
-  @media (max-width: 820px) {
-    main { padding: 22px 20px 32px; }
-    .actionbar-in { padding: 10px 20px; }
-    .effect { grid-template-columns: 160px 1fr; gap: 16px; }
-    .frow { grid-template-columns: minmax(0, 1fr) 42px 58px 172px; }
-    .fsrc { display: none; }
-    .seg-item { padding-left: 10px; padding-right: 10px; }
-    #levels .seg-item { font-size: 12.5px; }
-    .form-row { grid-template-columns: 22px 96px minmax(0, 1fr); }
+  /* ------------------------------------------------------------ sheets */
+  .sheet-wrap { position: fixed; inset: 0; z-index: 30; background: var(--dim); display: flex; justify-content: center; align-items: flex-start; animation: swap .18s ease-out; }
+  .sheet {
+    width: 460px; max-width: calc(100% - 48px); max-height: calc(100% - 40px); display: flex; flex-direction: column; background: var(--sheet); border-radius: 0 0 10px 10px;
+    box-shadow: 0 0 0 .5px var(--line), 0 18px 50px rgba(0, 0, 0, .3); animation: sheet-in .24s cubic-bezier(.2, .8, .2, 1);
+  }
+  .sheet.wide { width: 660px; }
+  .sheet [data-stage] { display: flex; flex-direction: column; min-height: 0; }
+  @keyframes sheet-in { from { transform: translateY(-20px); opacity: 0; } to { transform: none; opacity: 1; } }
+  .sheet-body { padding: 20px 20px 4px; overflow-y: auto; min-height: 0; }
+  .sheet-body > h2 { font-size: 14px; margin-bottom: 4px; }
+  .sheet-body p { margin-top: 8px; -webkit-user-select: text; user-select: text; }
+  .sheet-foot { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 16px 20px; }
+  .sheet-foot .left { margin-right: auto; }
+  .sheet-foot .btn { min-width: 76px; min-height: 28px; }
+  .sheet h3 { font-size: 11px; font-weight: 600; color: var(--muted); margin: 20px 0 4px; }
+  .sheet table { table-layout: auto; }
+  .sheet th { background: var(--sheet); position: static; }
+  .sheet th, .sheet td { padding: 0 12px 0 0; white-space: normal; height: auto; padding-top: 5px; padding-bottom: 5px; vertical-align: top; -webkit-user-select: text; user-select: text; }
+  .sheet th:first-child, .sheet td:first-child { padding-left: 0; } .sheet th:last-child, .sheet td:last-child { padding-right: 0; }
+  .sheet td.num, .sheet th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .scroll { max-height: 190px; overflow: auto; }
+  ul.plain { margin: 8px 0 0; padding-left: 16px; }
+  ul.plain li { margin-bottom: 2px; -webkit-user-select: text; user-select: text; }
+  ol.steps { margin: 4px 0 0; padding-left: 18px; }
+  ol.steps li { padding: 2px 0; -webkit-user-select: text; user-select: text; }
+  ol.steps strong, .figure strong { font-weight: 600; }
+  .fields { display: grid; gap: 8px; margin-top: 12px; }
+  .pw { position: relative; display: block; }
+  .pw input { width: 100%; min-height: 28px; padding-right: 32px; }
+  .eye { position: absolute; right: 3px; top: 3px; width: 24px; height: 22px; border: 0; border-radius: 4px; background: none; color: var(--muted); display: grid; place-items: center; padding: 0; }
+  .eye:hover { background: var(--hover); }
+  .working { display: flex; align-items: center; gap: 12px; padding: 16px 0 12px; }
+  .where { margin-top: 12px; padding: 8px 10px; border-radius: 6px; background: var(--hover); }
+  .where .what { font-size: 11px; color: var(--muted); }
+  .dropzone { margin-top: 12px; border: 1px dashed var(--line); border-radius: 8px; padding: 20px 16px; text-align: center; color: var(--muted); }
+  .dropzone .buttons { display: flex; gap: 8px; justify-content: center; margin-top: 12px; }
+  .chosen-row { margin-top: 12px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 6px; background: var(--hover); }
+  .chosen-row .icon { color: var(--accent); }
+  .chosen-row .grow { flex: 1; min-width: 0; }
+  dl.counts { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; margin: 12px 0 0; }
+  dl.counts dt { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; } dl.counts dd { margin: 0; color: var(--muted); }
+  details > summary { list-style: none; display: inline-flex; align-items: center; gap: 4px; color: var(--accent); border-radius: 4px; padding: 0 2px; margin: 12px 0 0 -2px; }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before { content: ""; width: 5px; height: 5px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); transition: transform .15s; margin: 0 4px 0 2px; }
+  details[open] > summary::before { transform: rotate(45deg); }
+  .check-line { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
+  .q-text { font-size: 14px; margin-top: 4px; -webkit-user-select: text; user-select: text; }
+  .options { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 8px; }
+  .options .btn { min-height: 28px; }
+
+  .cards { margin-top: 12px; border-radius: 8px; box-shadow: inset 0 0 0 .5px var(--line); overflow: hidden; }
+  .card { font: inherit; color: inherit; width: 100%; text-align: left; background: none; border: 0; display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 1px 10px; padding: 9px 12px; }
+  .card + .card { border-top: .5px solid var(--line); }
+  .card:hover, .card.on { background: var(--hover); }
+  .card:focus-visible { outline-offset: -3px; }
+  .card .radio { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--faint); margin-top: 2px; grid-row: 1 / span 3; }
+  .card.on .radio { background: #ffffff; box-shadow: inset 0 0 0 4.5px var(--accent); }
+  .card .name { font-weight: 600; }
+  .card .tag { font-weight: 400; color: var(--muted); margin-left: 6px; }
+  .card .sum, .card .facts { grid-column: 2; color: var(--muted); }
+  .card .facts { font-size: 11.5px; }
+  .point { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 0 8px; padding: 12px 0; border-top: .5px solid var(--line-soft); }
+  .point:first-child { border-top: 0; padding-top: 8px; }
+  .point > .icon { color: var(--warn); margin-top: 1px; }
+  .point.done > .icon { color: var(--faint); }
+  .point .q-say { -webkit-user-select: text; user-select: text; }
+
+  .dropover { position: fixed; inset: 0; z-index: 40; pointer-events: none; background: var(--over); opacity: 0; visibility: hidden; transition: opacity .15s ease, visibility 0s .15s; }
+  .dropover.on { opacity: 1; visibility: visible; transition-delay: 0s; }
+  .dropover-in { position: absolute; inset: 12px; border: 2px dashed var(--accent); border-radius: 12px; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--accent); font-size: 17px; font-weight: 600; }
+  .dropover .icon { width: 28px; height: 28px; }
+
+  @media (max-width: 960px) {
+    .window { grid-template-columns: 172px minmax(0, 1fr); }
+    .panes { grid-template-columns: 216px minmax(0, 1fr); }
+    .outline-head, .orow { grid-template-columns: minmax(0, 1fr) 112px 124px 46px 50px; }
+    .outline-head > div, .orow > div { padding: 0 4px; }
+    .wide-only { display: none; }
+    select.kind { font-size: 11.5px; padding: 0 17px 0 5px; background-position: right 3px center; }
+    .detail-head input { width: 130px; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; transition-delay: 0s !important; }
-    .spinner { animation: pulse 1.6s ease-in-out infinite !important; animation-duration: 1.6s !important; }
+    .spinner, .progress::before { animation: pulse 1.6s ease-in-out infinite !important; animation-duration: 1.6s !important; }
+    .progress::before { left: 0; width: 100%; }
   }
 </style>
 </head>
 <body>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
-  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8.3-7 10-4-1.7-7-5.5-7-10V6l7-3z"/><path d="M9 12l2.2 2.2L15 10.5"/></symbol>
-  <symbol id="i-drop" viewBox="0 0 24 24"><path d="M12 3v11m0 0l-4-4m4 4l4-4"/><path d="M5 16v2.5A2.5 2.5 0 007.5 21h9a2.5 2.5 0 002.5-2.5V16"/></symbol>
-  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 018 0v3"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
-  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
-  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
-  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7.5A2.5 2.5 0 015.5 5h3.6l2 2.2h7.4A2.5 2.5 0 0121 9.7v7.8a2.5 2.5 0 01-2.500 2.500h-13A2.500 2.500 0 013 17.500v-10z"/></symbol>
-  <symbol id="i-back" viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 107.5-7.5H6.5"/><path d="M9.5 1.5l-3 3 3 3"/></symbol>
-  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="3"/></symbol>
-  <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.500 12 18.500 2.500 12 2.500 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 16 16"><path d="M1.75 4.25c0-.83.67-1.500 1.500-1.500h2.700l1.400 1.500h5.400c.83 0 1.500.67 1.500 1.500v5.500c0 .83-.67 1.500-1.500 1.500h-9.500c-.83 0-1.500-.67-1.500-1.500v-7z"/></symbol>
+  <symbol id="i-table" viewBox="0 0 16 16"><rect x="2" y="2.75" width="12" height="10.500" rx="1.500"/><path d="M2 6.250h12M2 9.750h12M6.250 6.250v7"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 16 16"><path d="M4.250 1.750h5l3 3v8c0 .83-.67 1.500-1.500 1.500h-6.500c-.83 0-1.500-.67-1.500-1.500v-9.500c0-.83.67-1.500 1.500-1.500z"/><path d="M9.250 1.750v3h3M5.500 8h5M5.500 10.500h5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 16 16"><path d="M4.250 1.750h5l3 3v8c0 .83-.67 1.500-1.500 1.500h-6.500c-.83 0-1.500-.67-1.500-1.500v-9.500c0-.83.67-1.500 1.500-1.500z"/><path d="M9.250 1.750v3h3"/></symbol>
+  <symbol id="i-stack" viewBox="0 0 16 16"><rect x="2" y="2.500" width="12" height="3.500" rx="1"/><rect x="2" y="8" width="12" height="5.500" rx="1"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 16 16"><rect x="3.250" y="7.250" width="9.500" height="6.500" rx="1.500"/><path d="M5.250 7.250v-2a2.750 2.750 0 015.500 0v2"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 16 16"><path d="M8 2.250l6.250 11h-12.500L8 2.250z"/><path d="M8 6.500v3.250M8 11.500v.01"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></symbol>
+  <symbol id="i-search" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.250"/><path d="M10.250 10.250L14 14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+  <symbol id="i-more" viewBox="0 0 16 16"><path d="M3.500 8h.01M8 8h.01M12.500 8h.01" stroke-width="2.200"/></symbol>
+  <symbol id="i-updown" viewBox="0 0 16 16"><path d="M4.500 6L8 2.750 11.500 6M4.500 10L8 13.250 11.500 10"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 16 16"><path d="M1.500 8S4 3.750 8 3.750 14.500 8 14.500 8 12 12.250 8 12.250 1.500 8 1.500 8z"/><circle cx="8" cy="8" r="2"/></symbol>
+  <symbol id="i-eye-off" viewBox="0 0 16 16"><path d="M1.500 8S4 3.750 8 3.750 14.500 8 14.500 8 12 12.250 8 12.250 1.500 8 1.500 8z"/><circle cx="8" cy="8" r="2"/><path d="M2.500 2.500l11 11"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 16 16"><path d="M8 1.75l5 2v3.6c0 3.1-2.1 5.6-5 6.9-2.9-1.3-5-3.8-5-6.9v-3.6l5-2z"/></symbol>
+  <symbol id="i-mark" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.25"/><path d="M8 4.75v3.75M8 11v.01"/></symbol>
+  <symbol id="i-done" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.25"/><path d="M5.25 8.25l1.9 1.9 3.6-3.9"/></symbol>
+  <symbol id="i-info" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.25"/><path d="M8 7.25v3.75M8 5v.01"/></symbol>
+  <symbol id="i-drop" viewBox="0 0 16 16"><path d="M8 2v8m0 0L5 7m3 3l3-3M3 11.500v1c0 .83.67 1.500 1.500 1.500h7c.83 0 1.500-.67 1.500-1.500v-1"/></symbol>
 </svg>
 
-<header class="bar" id="topbar">
-  <div class="bar-name"><svg class="icon"><use href="#i-shield"/></svg>Privatier</div>
-  <div class="seg" id="tabs" role="tablist" aria-label="What to do"></div>
-  <div class="bar-side sel" id="version"></div>
-</header>
-
-<main id="main">
-
-  <!-- Protect: choose what to protect -->
-  <section id="start">
-    <div class="hero">
-      <h1>Make a protected copy</h1>
-      <p class="muted">Names, birth dates, IDs and similar details are replaced by codes, so you can work on the copy with an AI tool.</p>
+<div class="window" id="window">
+  <aside class="sidebar" aria-label="Projects">
+    <div class="side-label" id="projects-label">Projects</div>
+    <div class="side-list" id="project-list" role="listbox" aria-labelledby="projects-label"></div>
+    <button class="side-add" id="add-folder" type="button" title="Command-O"><svg class="icon"><use href="#i-plus"/></svg>Add folder…</button>
+    <div class="side-hint" id="side-hint">Privatier can only work inside the folders you add here.</div>
+    <div class="note bad side-error hidden" id="status-error" role="alert"></div>
+    <div class="side-foot">
+      <label class="row" id="ai-row"><span id="ai-title">Find names with the local AI</span>
+        <span class="switch"><input type="checkbox" role="switch" id="ai" aria-labelledby="ai-title" aria-describedby="ai-note"><span class="track"></span></span></label>
+      <div id="ai-note" class="hidden" style="margin-top:4px"></div>
+      <div class="quiet"><svg class="icon"><use href="#i-lock"/></svg><span>Nothing leaves this computer.</span></div>
+      <div class="sel" id="version" style="margin-top:4px;color:var(--faint)"></div>
     </div>
-    <div class="drop" id="drop">
-      <div class="drop-icon"><svg class="icon"><use href="#i-drop"/></svg></div>
-      <div class="big">Drop a folder or files here</div>
-      <div class="muted">Excel, SPSS, CSV, Word, PDF and text files</div>
-      <div class="buttons">
-        <button class="btn primary large" id="choose-folder" type="button" title="Command-O">Choose a folder</button>
-        <button class="btn large" id="choose-files" type="button">Choose files</button>
+  </aside>
+
+  <div class="main">
+    <header class="toolbar">
+      <div class="titles">
+        <div class="title cut sel" id="title">Privatier</div>
+        <div class="small muted cut" id="subtitle"></div>
       </div>
-    </div>
-    <div id="start-error" class="message bad hidden" role="alert" style="margin: 0 0 16px"></div>
-    <div class="card setting">
-      <div>
-        <strong id="ai-title">Use the local AI to find names in free text</strong> <span class="muted" id="ai-recommended">(recommended)</span>
-        <div class="muted small sel" id="ai-note" style="margin-top:2px">It runs on this computer. Without it, names with no hint around them can be missed.</div>
-      </div>
-      <label class="switch"><input type="checkbox" role="switch" id="ai" aria-labelledby="ai-title" aria-describedby="ai-note"><span class="track"></span></label>
-    </div>
-    <div class="assure"><svg class="icon"><use href="#i-lock"/></svg>Nothing leaves this computer, and your original files are never changed.</div>
-  </section>
+      <button class="btn bare hidden" id="protection-button" type="button" title="Protection: how much detail the copy keeps"><svg class="icon"><use href="#i-shield"/></svg><span><span id="protection-level"></span><span class="wide-only" id="protection-name"></span></span></button>
+      <button class="btn bare hidden" id="points-button" type="button"><svg class="icon"><use id="points-icon" href="#i-mark"/></svg><span id="points-count"></span></button>
+      <span class="sep hidden" id="toolbar-sep"></span>
+      <button class="btn bare" id="restore-button" type="button" disabled>Restore…</button>
+      <button class="btn primary" id="copy-button" type="button" disabled>Make copy…</button>
+    </header>
+    <div class="progress hidden" id="progress" role="progressbar" aria-label="Working"></div>
 
-  <!-- Waiting -->
-  <section id="busy" class="hidden" aria-live="polite">
-    <div class="card busy-card">
-      <div class="spinner"></div>
-      <div id="busy-text">Reading your files</div>
-      <div id="busy-sub" class="small"></div>
-      <p class="muted small" style="margin:10px 0 0">Network access is blocked while your data is being read.</p>
+    <!-- Nothing open: no projects yet, a folder that cannot be reached, or an error -->
+    <div class="blank" id="blank">
+      <h1 id="blank-title"></h1>
+      <p id="blank-text" class="sel"></p>
+      <button class="btn" id="blank-button" type="button">Add folder…</button>
     </div>
-  </section>
+    <div class="opening hidden" id="opening" aria-live="polite"><span class="spinner"></span><div class="st-head"></div><div class="st-sub"></div></div>
 
-  <!-- Protect: glance, answer if asked, make the copy -->
-  <section id="review" class="hidden">
-    <div class="spread" style="margin-bottom:18px">
-      <div style="min-width:0"><h1 class="sel" id="folder-name"></h1><div class="muted small" id="folder-facts"></div></div>
-      <button class="btn" id="restart" type="button" style="flex:none"></button>
-    </div>
-
-    <div class="card">
-      <div class="lead">
-        <div class="lead-mark"><svg class="icon"><use href="#i-shield"/></svg></div>
-        <div><h2>Ready to make a protected copy</h2><p id="summary-line"></p></div>
-      </div>
-      <div class="type-chips" id="type-chips" aria-label="What was found, by kind"></div>
-      <div class="quiet-line hidden" id="summary-quiet"><svg class="icon"><use href="#i-check"/></svg>Nothing to ask: the data settles who is who.</div>
-      <div id="ai-warning" class="message warn hidden">The local AI was not used, so names with no hint around them can be missed. Look through the copy before you upload it.</div>
-      <div id="review-error" class="message bad hidden" role="alert"></div>
-      <details id="notes-box" class="hidden" style="margin-top:14px">
-        <summary>Worth knowing</summary>
-        <ul class="tight small" id="notes"></ul>
-      </details>
-    </div>
-
-    <div class="card" id="questions-card">
-      <div id="questions-open">
-        <div class="q-head">
-          <div><h2 id="questions-title"></h2><div class="small muted" style="margin-top:2px">You can skip them: what is unclear stays apart.</div></div>
-          <button class="btn plain hidden" id="questions-hide" type="button">Done</button>
+    <div class="panes hidden" id="panes">
+      <section class="files" aria-label="Files">
+        <div class="file-list" id="file-list" role="listbox" aria-label="Files of this project"></div>
+        <div class="note bad hidden" id="files-error" role="alert" style="margin:0;padding:8px 16px"></div>
+      </section>
+      <section class="detail" aria-label="What will be replaced">
+        <div class="detail-head">
+          <div class="line cut sel" id="detail-line"></div>
+          <span class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="filter" placeholder="Search" aria-label="Search what was found" title="Command-F"></span>
         </div>
-        <div class="small muted sel q-where" id="question-where"></div>
-        <div class="question-text" id="question-text"></div>
-        <div class="options" id="question-options"></div>
-        <div class="nav">
-          <button class="btn" id="previous" type="button">Previous</button>
-          <span class="small muted" id="question-count"></span>
-          <button class="btn" id="next" type="button">Skip for now</button>
+        <div class="table-wrap" id="table-wrap">
+          <div id="outline" role="treegrid" aria-label="What will be replaced">
+            <div class="outline-head" role="row"><div id="outline-first" role="columnheader">Column</div><div role="columnheader">Kind</div><div role="columnheader">Becomes</div><div class="c-found" role="columnheader">Found</div><div class="c-replace" role="columnheader">Replace</div></div>
+            <div id="outline-rows" role="rowgroup"></div>
+          </div>
+          <div class="pane-note hidden" id="found-note"></div>
         </div>
-      </div>
-      <div class="q-done hidden" id="questions-done">
-        <svg class="icon"><use href="#i-check"/></svg><span>All questions answered</span>
-        <button class="btn plain" id="questions-review" type="button">Review answers</button>
-      </div>
+        <div class="add-row">
+          <span class="muted">Add a missed word</span>
+          <input type="text" id="add-term" placeholder="Word or name" aria-label="Word or name to add" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button class="btn" id="add-button" type="button">Add</button>
+          <span id="tokens" style="display:contents"></span>
+          <span class="note bad hidden" id="add-error" role="alert" style="margin:0;flex-basis:100%"></span>
+        </div>
+      </section>
     </div>
 
-    <div class="card rows">
-      <div class="sect" id="sect-level">
-        <button class="sect-head" id="head-level" type="button" aria-expanded="false" aria-controls="body-level">
-          <span class="sect-title">Protection level</span><span class="sect-state" id="state-level"></span><span class="chevron"></span>
-        </button>
-        <div class="sect-body" id="body-level"><div class="sect-inner"><div class="sect-pad">
-          <div class="seg" id="levels" role="radiogroup" aria-label="Privacy level"></div>
-          <p style="margin:12px 0 0" id="level-summary"></p>
-          <div class="effect">
-            <div>
-              <div class="number" id="big-number"></div>
-              <div class="small muted" id="big-caption"></div>
-            </div>
-            <div>
-              <span class="pill sel" id="label"></span>
-              <ul class="tight small" id="reasons"></ul>
-            </div>
-          </div>
-          <div id="not-checked" class="message warn hidden"></div>
-          <details style="margin-top:14px">
-            <summary>Table by table</summary>
-            <div class="scroll"><table>
-              <thead><tr><th>Table</th><th class="num">Singled out</th><th class="num">In a group under 5</th><th>Compared</th></tr></thead>
-              <tbody id="table-rows"></tbody>
-            </table></div>
-          </details>
-        </div></div></div>
-      </div>
+  </div>
+</div>
 
-      <div class="sect" id="sect-found">
-        <button class="sect-head" id="head-found" type="button" aria-expanded="false" aria-controls="body-found">
-          <span class="sect-title">What was found</span><span class="sect-state" id="state-found"></span><span class="chevron"></span>
-        </button>
-        <div class="sect-body" id="body-found"><div class="sect-inner"><div class="sect-pad">
-          <p class="muted small" id="find-intro"></p>
-          <div id="find-area">
-            <div class="tools">
-              <span class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="find-search" placeholder="Search what was found" aria-label="Search what was found"></span>
-              <span class="small muted" id="find-kept"></span>
-            </div>
-            <div class="groups" id="find-groups"></div>
-          </div>
-          <hr class="rule">
-          <div><strong style="font-weight:600">Something missed?</strong> <span class="muted">Add a word or name, and it is replaced everywhere.</span></div>
-          <div class="add-line">
-            <input type="text" id="add-term" placeholder="Word or name" aria-label="Word or name to add" autocomplete="off" autocapitalize="off" spellcheck="false">
-            <button class="btn" id="add-button" type="button">Add</button>
-            <span class="spinner mini hidden" id="add-spinner" role="status" aria-label="Looking through your files again"></span>
-            <span class="small muted hidden" id="add-wait">Looking through your files again</span>
-          </div>
-          <div class="chips hidden" id="chips" aria-label="Added by you"></div>
-          <div id="add-error" class="message bad hidden" role="alert"></div>
-        </div></div></div>
-      </div>
+<div class="sheet-wrap hidden" id="sheet-wrap">
 
-      <div class="sect" id="sect-lost">
-        <button class="sect-head" id="head-lost" type="button" aria-expanded="false" aria-controls="body-lost">
-          <span class="sect-title">What loses detail</span><span class="sect-state" id="state-lost"></span><span class="chevron"></span>
-        </button>
-        <div class="sect-body" id="body-lost"><div class="sect-inner"><div class="sect-pad">
-          <p class="muted small" id="lost-intro"></p>
-          <div class="scroll" id="lost-box"><table>
+  <div class="sheet wide hidden" id="sheet-setup" role="dialog" aria-modal="true" aria-labelledby="setup-title">
+    <div data-stage="protection">
+      <div class="sheet-body">
+        <h2 id="setup-title">Protection</h2>
+        <div class="muted">How much detail should the copy keep? You can change this at any time with the Protection button, top right.</div>
+        <div class="cards" id="levels" role="radiogroup" aria-label="Protection level"></div>
+        <p id="label" style="font-weight:600;margin-top:16px"></p>
+        <ul class="plain" id="reasons"></ul>
+        <div id="not-checked" class="note warn hidden"></div>
+        <div id="level-error" class="note bad hidden" role="alert"></div>
+        <details>
+          <summary>More about this level</summary>
+          <h3 style="margin-top:8px">Table by table</h3>
+          <div class="scroll"><table>
+            <thead><tr><th>Table</th><th class="num">Singled out</th><th class="num">In a group under 5</th><th>Compared</th></tr></thead>
+            <tbody id="table-rows"></tbody>
+          </table></div>
+          <h3>What loses detail</h3>
+          <div id="lost-intro" class="muted sel"></div>
+          <div class="scroll" id="lost-box" style="margin-top:4px"><table>
             <thead><tr><th>Column</th><th>Table</th><th>What happens</th><th id="keep-head">Keep?</th></tr></thead>
             <tbody id="lost-rows"></tbody>
           </table></div>
-          <details style="margin-top:14px">
-            <summary>Add columns to the check</summary>
-            <p class="muted small">Sex, age and all dates are compared automatically. Tick anything else someone could know about a patient, such as a rare diagnosis. At level 4, rare values there are blanked too.</p>
-            <span class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="column-search" placeholder="Search column names" aria-label="Search column names"></span>
-            <div class="scroll" style="margin-top:8px" id="column-list"></div>
-          </details>
-        </div></div></div>
+          <h3>Add columns to the check</h3>
+          <div class="muted" style="margin:0 0 8px">Sex, age and all dates are compared automatically. Tick anything else someone could know about a patient, such as a rare diagnosis. At level 4, rare values there are blanked too.</div>
+          <span class="search"><svg class="icon"><use href="#i-search"/></svg><input type="search" id="column-search" placeholder="Search column names" aria-label="Search column names"></span>
+          <div class="scroll" style="margin-top:4px" id="column-list"></div>
+        </details>
       </div>
+      <div class="sheet-foot"><button class="btn" id="setup-done" type="button" data-close>Done</button><button class="btn primary" id="setup-continue" type="button">Continue</button></div>
     </div>
-  </section>
-
-  <!-- Protect: result -->
-  <section id="done" class="hidden">
-    <div class="card">
-      <div class="done-head">
-        <div class="lead-mark good"><svg class="icon"><use href="#i-check"/></svg></div>
-        <div><h1>The copy is finished</h1></div>
+    <div data-stage="points">
+      <div class="sheet-body">
+        <h2 id="points-title">Open points</h2>
+        <div class="muted" id="points-intro">Answering is optional. Whatever stays unanswered is kept apart, never guessed.</div>
+        <div id="points-list"></div>
+        <h3 id="notes-title">Good to know</h3>
+        <ul class="plain" id="notes"></ul>
       </div>
-      <div id="done-errors" class="message bad hidden"></div>
-      <div id="done-left-out" class="message warn hidden"></div>
-
-      <div class="next-title">What to do next</div>
-      <ol class="next">
-        <li><span><strong>Look through the copy before you upload it.</strong> <span class="muted">Automatic detection is never perfect.</span></span></li>
-        <li><span>Upload files from the copy to your AI tool, <strong>never the key folder</strong>.</span></li>
-        <li id="next-restore"><span>Later, use <strong>Restore</strong> to put the real values back into the results.</span></li>
-      </ol>
-      <div class="paths">
-        <div class="path-row"><div class="what">The copy</div><code id="done-output"></code></div>
-        <div class="path-row" id="done-key-line"><div class="what">Key and log: keep private and never upload</div><code id="done-key"></code></div>
-      </div>
-      <div class="row-end" style="margin-top:18px">
-        <button class="btn large" id="again" type="button">Back to this folder</button>
-        <button class="btn large" id="another" type="button">Protect something else</button>
-        <button class="btn primary large" id="finder" type="button">Show the copy in Finder</button>
-      </div>
-
-      <hr class="rule" style="margin:22px 0 18px">
-      <span class="pill sel" id="done-label"></span>
-      <ul class="tight" id="done-reasons"></ul>
-      <p id="done-kept" class="small hidden" style="margin-top:12px"></p>
-      <ul class="tight small" id="done-notes"></ul>
-      <details style="margin-top:14px">
-        <summary>Details</summary>
-        <p class="small muted">Measured on the files as written.</p>
-        <div class="scroll"><table>
-          <thead><tr><th>Table</th><th class="num">Singled out</th><th class="num">In a group under 5</th></tr></thead>
-          <tbody id="done-rows"></tbody>
-        </table></div>
-      </details>
+      <div class="sheet-foot"><button class="btn" id="setup-back" type="button">Back</button><button class="btn primary" type="button" data-close>Done</button></div>
     </div>
-  </section>
-
-  <!-- Restore: results, key, password -->
-  <section id="restore" class="hidden">
-    <div class="hero">
-      <h1>Put the real values back</h1>
-      <p class="muted">Puts the real values back into results the AI gave you, using your key file and password.</p>
-    </div>
-    <div class="card">
-      <div class="form-row" style="align-items:start">
-        <span class="dot" id="dot-results" style="margin-top:2px"><svg class="icon"><use href="#i-check"/></svg></span>
-        <div class="name" style="padding-top:3px">Results</div>
-        <div>
-          <div class="drop" id="restore-drop">
-            <div class="big" style="font-size:16px">Drop a folder or files here</div>
-            <div class="muted small">What the AI gave you, saved on this computer</div>
-            <div class="buttons" style="margin-top:14px">
-              <button class="btn" id="restore-folder" type="button" title="Command-O">Choose a folder</button>
-              <button class="btn" id="restore-files" type="button">Choose files</button>
-            </div>
-          </div>
-          <div class="value hidden" id="restore-chosen">
-            <div class="chosen-item grow">
-              <svg class="icon"><use href="#i-folder"/></svg>
-              <div style="min-width:0"><strong id="restore-name"></strong><div class="small muted" id="restore-count"></div></div>
-            </div>
-            <button class="btn" id="restore-change" type="button">Change</button>
-          </div>
-        </div>
-      </div>
-      <div class="form-row">
-        <span class="dot" id="dot-key"><svg class="icon"><use href="#i-check"/></svg></span>
-        <div class="name">Key file</div>
-        <div class="value">
-          <div class="grow"><code id="key-path"></code><div class="small muted" id="key-note"></div></div>
-          <button class="btn" id="choose-key" type="button">Choose key file</button>
-        </div>
-      </div>
-      <div class="form-row">
-        <span class="dot" id="dot-password"><svg class="icon"><use href="#i-check"/></svg></span>
-        <div class="name"><label for="restore-password">Password</label></div>
-        <div class="value"><input type="password" id="restore-password" placeholder="Password of the key" autocomplete="off"></div>
-      </div>
-      <div id="restore-error" class="message bad hidden" role="alert" style="margin-top:0"></div>
-      <div class="row-end" style="margin-top:16px">
-        <span class="small muted" style="margin-right:auto" id="restore-hint"></span>
-        <button class="btn primary large" id="restore-go" type="button" disabled>Restore</button>
-      </div>
-    </div>
-    <div class="assure"><svg class="icon"><use href="#i-lock"/></svg>Nothing leaves this computer.</div>
-  </section>
-
-  <!-- Restore: result -->
-  <section id="restored" class="hidden">
-    <div class="card">
-      <div class="done-head">
-        <div class="lead-mark good"><svg class="icon"><use href="#i-check"/></svg></div>
-        <div><h1>The real values are back</h1></div>
-      </div>
-      <div class="stats">
-        <div class="stat"><div class="value" id="restored-files"></div><div class="what" id="restored-files-what"></div></div>
-        <div class="stat"><div class="value" id="restored-values"></div><div class="what" id="restored-values-what"></div></div>
-        <div class="stat"><div class="value" id="restored-unknown"></div><div class="what" id="restored-unknown-what"></div></div>
-      </div>
-      <div id="restored-errors" class="message bad hidden"></div>
-      <div id="restored-unknown-note" class="message warn hidden"></div>
-      <div id="restored-skipped" class="message warn hidden"></div>
-      <div class="next-title">What to do next</div>
-      <ol class="next">
-        <li><span><strong>These files hold real patient data again.</strong> <span class="muted">Keep them on this computer and do not upload them.</span></span></li>
-        <li><span>Open the restored files in Finder and check a few values.</span></li>
-      </ol>
-      <div class="paths">
-        <div class="path-row"><div class="what">The restored files</div><code id="restored-output"></code></div>
-      </div>
-      <div class="row-end" style="margin-top:18px">
-        <button class="btn large" id="to-protect" type="button">Protect</button>
-        <button class="btn large" id="restore-again" type="button">Restore another</button>
-        <button class="btn primary large" id="restore-finder" type="button">Show in Finder</button>
-      </div>
-    </div>
-  </section>
-
-</main>
-
-<footer class="actionbar hidden" id="actionbar">
-  <div class="actionbar-in">
-    <div class="line sel" id="export-summary"></div>
-    <button class="btn primary large" id="export" type="button">Make the copy</button>
   </div>
-</footer>
 
-<!-- The sheet that asks for the password, or for a yes, before the copy is made -->
-<div class="sheet-wrap hidden" id="sheet">
-  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" aria-describedby="sheet-note">
-    <h2 id="sheet-title"></h2>
-    <p class="small muted" id="sheet-note" style="margin:0"></p>
-    <div class="fields" id="sheet-fields">
-      <span class="pw">
-        <input type="password" id="password" placeholder="Password" aria-label="Password" autocomplete="new-password">
-        <button class="eye" id="eye" type="button" aria-label="Show the password" aria-pressed="false"><svg class="icon"><use id="eye-icon" href="#i-eye"/></svg></button>
-      </span>
-      <span class="pw"><input type="password" id="password2" placeholder="Repeat password" aria-label="Repeat password" autocomplete="new-password"></span>
+  <div class="sheet hidden" id="sheet-remove" role="dialog" aria-modal="true" aria-labelledby="remove-title">
+    <div class="sheet-body">
+      <h2 id="remove-title"></h2>
+      <p class="muted">Nothing is deleted: the folder and everything in it stay where they are.</p>
+      <div id="remove-error" class="note bad hidden" role="alert"></div>
     </div>
-    <div id="sheet-error" class="message bad hidden" role="alert"></div>
-    <div class="row-end" style="margin-top:18px">
-      <button class="btn large" id="sheet-cancel" type="button">Cancel</button>
-      <button class="btn primary large" id="sheet-go" type="button">Make the copy</button>
+    <div class="sheet-foot"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" id="remove-go" type="button">Remove</button></div>
+  </div>
+
+  <div class="sheet hidden" id="sheet-copy" role="dialog" aria-modal="true" aria-labelledby="copy-title">
+    <div data-stage="form">
+      <div class="sheet-body">
+        <h2 id="copy-title"></h2>
+        <p class="muted" id="copy-note" style="margin-top:0"></p>
+        <div class="fields" id="copy-fields">
+          <span class="pw">
+            <input type="password" id="password" placeholder="Password" aria-label="Password" autocomplete="new-password">
+            <button class="eye" id="eye" type="button" aria-label="Show the password" aria-pressed="false"><svg class="icon"><use id="eye-icon" href="#i-eye"/></svg></button>
+          </span>
+          <span class="pw"><input type="password" id="password2" placeholder="Repeat password" aria-label="Repeat password" autocomplete="new-password"></span>
+        </div>
+        <p id="copy-line"></p>
+        <p class="muted" style="margin-top:4px">The copy is written to the folder Privatier inside this project.</p>
+        <div id="copy-error" class="note bad hidden" role="alert"></div>
+      </div>
+      <div class="sheet-foot"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" id="copy-go" type="button">Make copy</button></div>
+    </div>
+    <div data-stage="working">
+      <div class="sheet-body"><h2>Making the copy</h2><div class="working"><span class="spinner"></span><div><div class="st-head"></div><div class="st-sub muted small"></div></div></div></div>
+    </div>
+    <div data-stage="result">
+      <div class="sheet-body">
+        <h2>The copy is finished</h2>
+        <div id="done-errors" class="note bad hidden"></div>
+        <div id="done-left-out" class="note warn hidden"></div>
+        <h3>What to do next</h3>
+        <ol class="steps">
+          <li><strong>Look through the copy before you upload it.</strong> <span class="muted">Automatic detection is never perfect.</span></li>
+          <li>Upload files from the copy to your AI tool, <strong>never the key</strong>.</li>
+          <li id="next-restore">Later, use <strong>Restore…</strong> to put the real values back into the results.</li>
+        </ol>
+        <div class="where"><div class="what">The copy, inside this project</div><code id="done-where"></code></div>
+        <h3>Result of the check</h3>
+        <div id="done-label" class="sel" style="font-weight:600"></div>
+        <ul class="plain" id="done-reasons"></ul>
+        <p id="done-kept" class="muted hidden"></p>
+        <ul class="plain muted" id="done-notes"></ul>
+        <details>
+          <summary>Details</summary>
+          <div class="muted" style="margin:4px 0">Measured on the files as written.</div>
+          <div class="scroll"><table>
+            <thead><tr><th>Table</th><th class="num">Singled out</th><th class="num">In a group under 5</th></tr></thead>
+            <tbody id="done-rows"></tbody>
+          </table></div>
+          <div class="muted small" style="margin-top:8px">Key and log, when kept: <code id="done-key"></code></div>
+        </details>
+      </div>
+      <div class="sheet-foot"><button class="btn" type="button" data-close>Done</button><button class="btn primary" id="finder" type="button">Show in Finder</button></div>
+    </div>
+  </div>
+
+  <div class="sheet hidden" id="sheet-restore" role="dialog" aria-modal="true" aria-labelledby="restore-title">
+    <div data-stage="nokey">
+      <div class="sheet-body">
+        <h2 id="restore-title">Put the real values back</h2>
+        <p>This project has no key yet, so there is nothing to put back.</p>
+        <p class="muted">A key is made when you make a copy at level 1 or 2. With it, Privatier can put the real values back into results the AI gave you.</p>
+      </div>
+      <div class="sheet-foot"><button class="btn primary" type="button" data-close>Done</button></div>
+    </div>
+    <div data-stage="form">
+      <div class="sheet-body">
+        <h2>Put the real values back</h2>
+        <p class="muted" style="margin-top:0">Into results the AI gave you, using the key of this project and its password.</p>
+        <div class="dropzone" id="restore-drop">
+          Drop the results here: a folder or files
+          <div class="buttons"><button class="btn" id="restore-folder" type="button">Choose a folder…</button><button class="btn" id="restore-files" type="button">Choose files…</button></div>
+        </div>
+        <div class="chosen-row hidden" id="restore-chosen">
+          <svg class="icon"><use href="#i-folder"/></svg>
+          <div class="grow"><div class="cut sel" id="restore-name"></div><div class="small muted" id="restore-count"></div></div>
+          <button class="btn" id="restore-change" type="button">Change</button>
+        </div>
+        <div class="fields"><span class="pw"><input type="password" id="restore-password" placeholder="Password of this project's key" aria-label="Password of this project's key" autocomplete="off"></span></div>
+        <div id="restore-error" class="note bad hidden" role="alert"></div>
+      </div>
+      <div class="sheet-foot"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" id="restore-go" type="button" disabled>Restore</button></div>
+    </div>
+    <div data-stage="working">
+      <div class="sheet-body"><h2>Putting the real values back</h2><div class="working"><span class="spinner"></span><div><div class="st-head"></div><div class="st-sub muted small"></div></div></div></div>
+    </div>
+    <div data-stage="result">
+      <div class="sheet-body">
+        <h2>The real values are back</h2>
+        <dl class="counts" id="restored-counts"></dl>
+        <div id="restored-errors" class="note bad hidden"></div>
+        <div id="restored-unknown" class="note warn hidden"></div>
+        <div id="restored-skipped" class="note warn hidden"></div>
+        <h3>What to do next</h3>
+        <ol class="steps">
+          <li><strong>These files hold real patient data again.</strong> <span class="muted">Keep them on this computer and do not upload them.</span></li>
+          <li>Open the restored files and check a few values.</li>
+        </ol>
+        <div class="where"><div class="what">The restored files</div><code id="restored-output"></code></div>
+      </div>
+      <div class="sheet-foot"><button class="btn" type="button" data-close>Done</button><button class="btn primary" id="restore-finder" type="button">Show in Finder</button></div>
     </div>
   </div>
 </div>
+
+<div class="popover hidden" id="popover" role="dialog" aria-label="Open point"></div>
+
+<div class="menu hidden" id="menu" role="menu"><button type="button" role="menuitem" id="menu-remove">Remove from list…</button></div>
 
 <div class="dropover" id="dropover" aria-hidden="true">
   <div class="dropover-in"><svg class="icon"><use href="#i-drop"/></svg><span id="dropover-text"></span></div>
@@ -669,21 +569,23 @@
 const $ = id => document.getElementById(id);
 const api = () => window.pywebview.api;
 const FAILED = "Something went wrong. Your original files were not changed.";
-const PAGE = 50;  // rows of one group shown at a time: the list stays fast with thousands of findings
-const SOURCES = { column: "from a column", rule: "by a rule", ai: "by the local AI", known: "known from elsewhere", added: "added by you" };
-const SECTIONS = ["start", "busy", "review", "done", "restore", "restored"];
+const LIMIT = 200;  // values of one column shown at first: the list stays fast with thousands of findings
+const NO_AI = "The local AI was not used, so names with no hint around them can be missed. Look through the copy before you upload it.";
+const ONLY_HERE = "Privatier can only work inside the folders you add here.";
+const UNREACHABLE = "This folder cannot be reached. Add it again.";
 const TITLES = {  // every error gets a short, friendly headline
-  "start-error": "That did not work", "review-error": "The numbers could not be updated", "add-error": "This could not be added",
-  "sheet-error": "The copy was not made", "restore-error": "That did not work",
+  "files-error": "The files could not be updated.", "add-error": "That did not work.", "level-error": "The numbers could not be updated.",
+  "copy-error": "The copy was not made.", "restore-error": "That did not work.", "remove-error": "That did not work.", "status-error": "That did not work.",
 };
 
 const state = {
-  tab: "protect", view: { protect: "start", restore: "restore" }, busy: false, sheet: false,
-  scan: null, preview: null, level: 1, answers: {}, ticked: [], kept: [], current: 0, output: "", showAnswers: false,
-  keep: new Set(), extra: [], reviewing: false,
-  groups: [], open: new Set(), closed: new Set(), limits: {}, badges: new Map(),
-  sections: { level: false, found: false, lost: false },  // remembered while the page lives
-  restore: { paths: [], info: null, key: "", suggested: false, output: "" },
+  projects: [], current: null, scan: null, preview: null,
+  busy: false,      // a project is being opened: no switching meanwhile
+  working: 0,       // smaller jobs under way (files, added words)
+  sheet: null, locked: false, opener: null,
+  ui: new Map(),    // per project, while the page lives: level, answers, what to keep, added words, files left out
+  byId: new Map(), nodes: new Map(), points: new Map(),  // looked up from the scan: values, outline rows, open points
+  restore: { paths: [], info: null, output: "" }, output: "", removing: null,
 };
 
 // --------------------------------------------------------------- small helpers
@@ -693,36 +595,26 @@ function cell(row, value, cls) { const td = make("td", cls, value); row.appendCh
 function sameRef(a, b) { return a[0] === b[0] && a[1] === b[1] && a[2] === b[2]; }
 function hasRef(list, ref) { return list.some(r => sameRef(r, ref)); }
 function plural(n, word) { return `${n} ${word}${n === 1 ? "" : "s"}`; }
+function show(id, on) { $(id).classList.toggle("hidden", !on); }
+function hide(id) { $(id).classList.add("hidden"); }
 function showMessage(id, message, title) {
   const box = $(id);
-  box.replaceChildren(make("strong", "", title || TITLES[id] || "That did not work"), make("span", "", message));
+  box.replaceChildren(make("strong", "", title || TITLES[id] || "That did not work."), make("span", "", message));
   box.classList.remove("hidden");
 }
-function hide(id) { $(id).classList.add("hidden"); }
 function button(label, cls) { const b = make("button", cls || "btn", label); b.type = "button"; return b; }
-function icon(name) {
+function icon(name, cls) {
   const ns = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("class", "icon");
+  svg.setAttribute("class", "icon" + (cls ? " " + cls : ""));
   svg.setAttribute("aria-hidden", "true");
   const use = document.createElementNS(ns, "use");
   use.setAttribute("href", "#i-" + name);
   svg.appendChild(use);
   return svg;
 }
-function manyOf(label) {
-  // "Name" -> "Names", "Date of birth" -> "Dates of birth", "Word added by you" -> "Words added by you"
-  const cut = / (of|added|in|from|by) /.exec(label);
-  const at = cut ? cut.index : -1;
-  const head = at > 0 ? label.slice(0, at) : label;
-  const tail = at > 0 ? label.slice(at) : "";
-  let many = head + "s";
-  if (/(s|x|ch|sh)$/i.test(head)) many = head + "es";
-  else if (/[^aeiou]y$/i.test(head)) many = head.slice(0, -1) + "ies";
-  return many + tail;
-}
 async function call(method, ...args) {
-  // Every call can fail: the answer is then {error}, shown next to the action that asked.
+  // Every call can fail: the answer is then {error}, shown where the action was.
   try {
     const result = await api()[method](...args);
     return result === undefined ? null : result;
@@ -730,237 +622,906 @@ async function call(method, ...args) {
     return { error: FAILED };
   }
 }
-function makeSwitch(checked, label, onChange) {
-  const wrap = make("label", "switch");
-  const input = make("input");
-  input.type = "checkbox";
-  input.setAttribute("role", "switch");
-  input.setAttribute("aria-label", label);
-  input.checked = checked;
-  input.addEventListener("change", () => onChange(input.checked));
-  wrap.append(input, make("span", "track"));
-  return wrap;
-}
+function failed(result) { return !result || result.error; }
 function swap(el, value) {
-  // New words fade in, so a changing status reads calmly.
   if (el.textContent === value) return;
   el.textContent = value;
   el.classList.remove("swap");
   void el.offsetWidth;
   el.classList.add("swap");
 }
-
-// --------------------------------------------------------------- segmented controls
-function buildSeg(root, items, role, onPick) {
-  root.replaceChildren();
-  root.style.setProperty("--n", items.length);
-  const thumb = make("span", "seg-thumb");
-  thumb.setAttribute("aria-hidden", "true");
-  root.appendChild(thumb);
-  items.forEach((item, i) => {
-    const b = button(item.label, "seg-item");
-    if (item.note) b.appendChild(make("span", "seg-note", item.note));
-    b.setAttribute("role", role);
-    b.dataset.value = item.value;
-    b.addEventListener("click", () => onPick(item.value));
-    b.addEventListener("keydown", e => {
-      const step = ["ArrowRight", "ArrowDown"].includes(e.key) ? 1 : ["ArrowLeft", "ArrowUp"].includes(e.key) ? -1 : 0;
-      if (!step) return;
-      e.preventDefault();
-      const target = root.querySelectorAll(".seg-item")[(i + step + items.length) % items.length];
-      target.focus();
-      target.click();
-    });
-    root.appendChild(b);
-  });
+function midName(name) {
+  // Long names lose their middle, so the ending that tells files apart stays readable.
+  const wrap = make("span", "mid");
+  if (name.length <= 20) { wrap.appendChild(make("span", "mid-a", name)); return wrap; }
+  const cut = name.length - 9;
+  wrap.append(make("span", "mid-a", name.slice(0, cut)), make("span", "mid-b", name.slice(cut)));
+  return wrap;
 }
-function setSeg(root, value) {
-  root.querySelectorAll(".seg-item").forEach((b, i) => {
-    const on = b.dataset.value === String(value);
-    b.classList.toggle("on", on);
-    b.setAttribute(b.getAttribute("role") === "tab" ? "aria-selected" : "aria-checked", String(on));
-    b.tabIndex = on ? 0 : -1;
-    if (on) root.style.setProperty("--i", i);
-  });
-}
+function project(id) { return state.projects.find(p => p.id === id) || null; }
+function ui() { return state.ui.get(state.current); }
+function level() { return state.scan.levels[ui().level - 1]; }
 
-// --------------------------------------------------------------- which screen is shown
-function render() {
-  const visible = state.busy ? "busy" : state.view[state.tab];
-  SECTIONS.forEach(s => $(s).classList.toggle("hidden", s !== visible));
-  $("actionbar").classList.toggle("hidden", visible !== "review");
-  setSeg($("tabs"), state.tab);
-  $("tabs").querySelectorAll(".seg-item").forEach(b => { b.disabled = state.busy; });
-}
-function go(view) { state.busy = false; state.view[state.tab] = view; render(); window.scrollTo(0, 0); }
-function setTab(tab) { if (state.busy || state.sheet || tab === state.tab) return; state.tab = tab; render(); window.scrollTo(0, 0); }
-
-function setBusyText(value) {
-  // "Reading your files · File 3 of 12": the first part is the headline, the second a quiet line below.
+// --------------------------------------------------------------- status: what is being done right now
+function setStatus(value) {
+  // "Reading your files · File 3 of 12": the first part is the headline, the second a quiet part after it.
   const at = value.indexOf(" · ");
-  swap($("busy-text"), at >= 0 ? value.slice(0, at) : value);
-  swap($("busy-sub"), at >= 0 ? value.slice(at + 3) : "");
+  document.querySelectorAll(".st-head").forEach(el => swap(el, at >= 0 ? value.slice(0, at) : value));
+  document.querySelectorAll(".st-sub").forEach(el => swap(el, at >= 0 ? value.slice(at + 3) : ""));
 }
-async function withBusy(message, method, ...args) {
-  state.busy = true;
-  text($("busy-text"), "");
-  text($("busy-sub"), "");
-  setBusyText(message);
-  render();
-  window.scrollTo(0, 0);
+async function withStatus(message, method, ...args) {
+  setStatus(message);
   const ticker = setInterval(async () => {
     const status = await call("status");
-    if (state.busy && typeof status === "string" && status) setBusyText(status);
+    if (typeof status === "string" && status) setStatus(status);
   }, 700);
   const result = await call(method, ...args);
   clearInterval(ticker);
   return result || { error: FAILED };
 }
+function renderChrome() {
+  // Toolbar and progress line: what is open, and whether something is under way.
+  const p = project(state.current);
+  const s = state.scan;
+  text($("title"), p ? p.name : "Privatier");
+  const facts = [];
+  if (s) {
+    facts.push(plural(s.tables, "table"));
+    if (s.other_files) facts.push(plural(s.other_files, "other file"));
+    if (s.unsupported.length) facts.push(`${s.unsupported.length} not supported`);
+  }
+  text($("subtitle"), facts.join(" · "));
+  $("subtitle").classList.toggle("hidden", !facts.length);
+  const idle = Boolean(s) && !state.busy && !state.working;
+  $("copy-button").disabled = $("restore-button").disabled = !idle;
+  show("progress", state.busy || state.working > 0);
+  show("opening", state.busy);
+  show("panes", Boolean(s) && !state.busy);
+  show("blank", !s && !state.busy);
+  show("side-hint", state.projects.length > 0);
+  if (s && !state.busy) renderToolbar();
+  else for (const id of ["protection-button", "points-button", "toolbar-sep"]) hide(id);
+}
 
-// --------------------------------------------------------------- choosing what to protect
-async function startScan(paths) {
-  hide("start-error");
-  const result = await withBusy("Reading your files", "scan", paths, $("ai").checked);
-  if (result.error) {
-    go("start");
-    showMessage("start-error", result.error);
+// --------------------------------------------------------------- projects
+function renderProjects() {
+  const list = $("project-list");
+  list.replaceChildren();
+  state.projects.forEach(p => {
+    const row = make("div", "prow" + (p.id === state.current ? " on" : "") + (p.available ? "" : " off"));
+    row.setAttribute("role", "option");
+    row.setAttribute("aria-selected", String(p.id === state.current));
+    row.tabIndex = p.id === state.current || (!state.current && p === state.projects[0]) ? 0 : -1;
+    row.dataset.id = p.id;
+    row.setAttribute("aria-label", p.available ? p.name : `${p.name}. ${UNREACHABLE}`);
+    row.title = p.available ? p.path : UNREACHABLE;
+    const more = button("", "more");
+    more.setAttribute("aria-label", `More for ${p.name}`);
+    more.tabIndex = -1;
+    more.appendChild(icon("more"));
+    more.addEventListener("click", e => { e.stopPropagation(); const r = more.getBoundingClientRect(); openMenu(p.id, r.left, r.bottom + 2); });
+    row.append(icon("folder"), make("span", "name cut", p.name));
+    if (!p.available) row.appendChild(icon("warn", "warn-icon"));
+    row.appendChild(more);
+    row.addEventListener("click", () => selectProject(p.id));
+    row.addEventListener("contextmenu", e => { e.preventDefault(); openMenu(p.id, e.clientX, e.clientY); });
+    row.addEventListener("keydown", e => {
+      const rows = [...list.children];
+      const at = rows.indexOf(row);
+      if (e.key === "ArrowDown" && rows[at + 1]) { e.preventDefault(); rows[at + 1].focus(); }
+      if (e.key === "ArrowUp" && rows[at - 1]) { e.preventDefault(); rows[at - 1].focus(); }
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectProject(p.id); }
+      if (e.key === "Backspace" || e.key === "Delete") { e.preventDefault(); askRemove(p.id); }
+    });
+    list.appendChild(row);
+  });
+  show("projects-label", state.projects.length > 0);
+}
+function renderBlank(title, message, action) {
+  text($("blank-title"), title);
+  text($("blank-text"), message);
+  show("blank-button", Boolean(action));
+}
+function showEmpty() {
+  state.scan = null;
+  if (!state.projects.length) renderBlank("Add a project folder", ONLY_HERE, true);
+  else renderBlank("Choose a project", "Choose a project on the left, or add another folder.", false);
+  renderChrome();
+}
+
+function freshUi() { return { level: 1, answers: {}, keep: new Set(), extra: [], ticked: [], kept: [], file: null, off: new Set(), openRows: new Set(), showAll: new Set() }; }
+
+async function selectProject(id, again) {
+  if (state.busy || state.sheet) return;
+  if (id === state.current && state.scan && !again) return;
+  clearTimeout(filesTimer);
+  clearTimeout(keepTimer);
+  closePopover();
+  const p = project(id);
+  if (!p) return;
+  state.current = id;
+  state.scan = null;
+  hide("status-error");
+  renderProjects();
+  if (!p.available) { renderBlank(p.name, UNREACHABLE, true); renderChrome(); return; }
+  state.busy = true;
+  renderChrome();
+  let result = await withStatus("Reading your files", "open_project", id, $("ai").checked);
+  // What was chosen for this project before comes back: files left out, added words, answers.
+  const saved = state.ui.get(id);
+  if (!failed(result) && saved) {
+    if (saved.off.size) {
+      const again = await withStatus("Reading your files", "set_files", result.files.filter(f => f.status === "ready" && !saved.off.has(f.path)).map(f => f.path));
+      if (!failed(again)) result = again;
+    }
+    if (saved.extra.length) {
+      const again = await withStatus("Reading your files", "review", [...saved.keep], saved.extra);
+      if (!failed(again)) result = again; else saved.extra = [];
+    }
+  }
+  state.busy = false;
+  setStatus("");
+  if (state.current !== id) return;
+  if (failed(result)) {
+    renderBlank("This project could not be opened", result ? result.error : FAILED, false);
+    renderChrome();
     return;
   }
-  Object.assign(state, {
-    scan: result, preview: result.preview, level: 1, answers: {}, ticked: [], kept: [], current: 0, showAnswers: false,
-    keep: new Set(), extra: [], open: new Set(), closed: new Set(), limits: {},
-  });
-  $("column-search").value = $("find-search").value = $("add-term").value = "";
-  $("password").value = $("password2").value = "";
-  hide("review-error");
+  if (!saved) {
+    const first = freshUi();
+    first.off = new Set(result.files.filter(f => f.status === "ready" && !f.selected).map(f => f.path));
+    state.ui.set(id, first);
+  }
+  $("filter").value = $("add-term").value = "";
+  hide("files-error");
   hide("add-error");
-  buildReview();
-  go("review");
+  applyScan(result, false);
+  openSetup("protection");  // only here, when a project was opened: never on a later refresh
 }
 
-async function chooseAndScan(kind) {
-  const paths = await call("choose", kind);
-  if (paths && paths.error) { showMessage("start-error", paths.error); return; }
-  if (paths && paths.length) startScan(paths);
+function applyScan(result, keepView) {
+  // A new answer from the Python side. keepView: the same list as before, so open rows and the scroll position stay.
+  const mine = ui();
+  const ids = new Set(result.questions.map(q => q.id));
+  mine.answers = Object.fromEntries(Object.entries(mine.answers).filter(([id]) => ids.has(id)));
+  if (mine.file && !result.files.some(f => f.path === mine.file)) mine.file = null;
+  state.byId = new Map();
+  for (const f of result.findings) { f.lower = String(f.value).toLowerCase(); state.byId.set(f.id, f); }
+  state.nodes = new Map();
+  state.scan = result;
+  state.preview = result.preview;
+  closePopover();
+  indexPoints();
+  renderChrome();
+  renderFiles();
+  renderOutline(Boolean(keepView));
+  renderTokens();
+  if (Object.keys(mine.answers).length || mine.ticked.length || mine.kept.length) refresh();
 }
-$("choose-folder").addEventListener("click", () => chooseAndScan("folder"));
-$("choose-files").addEventListener("click", () => chooseAndScan("files"));
 
-// The whole window takes a drop. The window tells the page what was dropped, with full paths.
-function dropWords() {
-  if (state.busy || state.sheet) return "";
-  if (state.tab === "protect") return state.view.protect === "start" ? "Drop to protect" : "";
-  return "Drop the results here";
+function setProjects(result) {
+  // Every call that changes the list answers with the whole list.
+  state.projects = result.projects || [];
+  for (const id of [...state.ui.keys()]) if (!project(id)) state.ui.delete(id);
+  if (state.current && !project(state.current)) state.current = null;
+  renderProjects();
 }
-let dragTimer = 0;
-function dragOver(on) { clearTimeout(dragTimer); $("dropover").classList.toggle("on", on); }
-window.itemsDropped = paths => {
-  dragOver(false);
-  if (!dropWords() || !Array.isArray(paths) || !paths.length) return;
-  if (state.tab === "protect") { startScan(paths); return; }
-  const keys = paths.filter(p => String(p).toLowerCase().endsWith(".vault"));
-  const rest = paths.filter(p => !keys.includes(p));
-  if (state.view.restore === "restored") go("restore");
-  if (keys.length) setKey(keys[0], false);
-  if (rest.length) setRestorePaths(rest);
-};
-for (const type of ["dragenter", "dragover"]) {
-  document.addEventListener(type, e => {
-    e.preventDefault();
-    const words = dropWords();
-    if (!words) return;
-    text($("dropover-text"), words);
-    dragOver(true);
-    dragTimer = setTimeout(() => dragOver(false), 400);  // dragging goes on sending these: silence means it left
+async function addProject(paths) {
+  if (state.busy || state.sheet) return;
+  hide("status-error");
+  const result = paths ? await call("add_project_paths", paths) : await call("add_project");
+  if (!result) return;  // cancelled
+  if (result.error) { showMessage("status-error", result.error, "This folder could not be added."); return; }
+  setProjects(result);
+  if (result.added) { state.ui.delete(result.added); selectProject(result.added, true); }
+  else if (!state.current) showEmpty();
+}
+$("add-folder").addEventListener("click", () => addProject());
+$("blank-button").addEventListener("click", () => addProject());
+
+let menuFor = null;
+function openMenu(id, x, y) {
+  menuFor = id;
+  const menu = $("menu");
+  menu.classList.remove("hidden");
+  menu.style.left = Math.min(x, window.innerWidth - menu.offsetWidth - 8) + "px";
+  menu.style.top = Math.min(y, window.innerHeight - menu.offsetHeight - 8) + "px";
+  $("menu-remove").focus();
+}
+function closeMenu() { hide("menu"); }
+document.addEventListener("mousedown", e => { if (!e.target.closest("#menu")) closeMenu(); });
+$("menu").addEventListener("keydown", e => { if (e.key === "Escape") { closeMenu(); const row = $("project-list").querySelector(`[data-id="${CSS.escape(menuFor)}"]`); if (row) row.focus(); } });
+$("menu-remove").addEventListener("click", () => { closeMenu(); askRemove(menuFor); });
+function askRemove(id) {
+  const p = project(id);
+  if (!p || state.busy) return;
+  state.removing = id;
+  text($("remove-title"), `Remove “${p.name}” from the list?`);
+  hide("remove-error");
+  openSheet("remove");
+}
+$("remove-go").addEventListener("click", async () => {
+  const result = await call("remove_project", state.removing);
+  if (failed(result)) { showMessage("remove-error", result ? result.error : FAILED); return; }
+  const wasOpen = state.removing === state.current;
+  closeSheet();
+  setProjects(result);
+  if (wasOpen || !state.current) showEmpty();
+});
+
+// --------------------------------------------------------------- files of the project
+function fileIcon(kind) { return icon(kind === "table" ? "table" : kind === "document" || kind === "text" ? "doc" : "file"); }
+function renderFiles() {
+  const mine = ui();
+  const list = $("file-list");
+  list.replaceChildren();
+  const rows = [];
+  const add = (row, path) => {
+    const on = mine.file === path;
+    row.classList.toggle("on", on);
+    row.setAttribute("role", "option");
+    row.setAttribute("aria-selected", String(on));
+    row.tabIndex = on ? 0 : -1;
+    row.addEventListener("click", e => { if (e.target.tagName !== "INPUT") pickFile(path, false); });
+    row.addEventListener("keydown", e => {
+      if (e.target !== row) return;
+      const at = rows.indexOf(row);
+      const next = e.key === "ArrowDown" ? rows[at + 1] : e.key === "ArrowUp" ? rows[at - 1] : null;
+      if (next) { e.preventDefault(); pickFile(next.dataset.path || null, true); }
+    });
+    if (path) row.dataset.path = path;
+    rows.push(row);
+    list.appendChild(row);
+  };
+  const all = make("div", "frow all");
+  all.append(icon("stack"), make("span", "mid", "All files"), make("span", "num", String(state.scan.findings.length)));
+  add(all, null);
+  for (const f of state.scan.files) {
+    const out = f.status === "left_out";
+    const off = mine.off.has(f.path);
+    const row = make("div", "frow" + (out || off ? " dim" : ""));
+    row.title = f.path + (out && f.reason ? `\nLeft out: ${f.reason}` : "");
+    if (out) row.appendChild(make("span", "gap"));
+    else {
+      const box = make("input");
+      box.type = "checkbox";
+      box.checked = !off;
+      box.setAttribute("aria-label", `Include ${f.name} in the copy`);
+      box.addEventListener("change", () => {
+        if (box.checked) mine.off.delete(f.path); else mine.off.add(f.path);
+        row.classList.toggle("dim", !box.checked);
+        filesChanged();
+      });
+      row.appendChild(box);
+    }
+    row.append(fileIcon(f.kind), midName(f.name));
+    if (out) row.appendChild(make("span", "state muted", "left out"));
+    else {
+      const points = filePoints(f);
+      if (points.total || f.selected !== false) {  // every file that goes into the copy says how it stands
+        const mark = make("span", "state " + (points.open ? "warn-text" : "done"));
+        mark.title = points.open ? `${plural(points.open, "open point")} in this file` : points.total ? "All open points in this file are answered" : "Nothing unclear in this file";
+        mark.append(icon(points.open ? "mark" : "done"), document.createTextNode(points.open ? String(points.open) : ""));
+        row.appendChild(mark);
+      }
+      if (f.found) row.appendChild(make("span", "num", String(f.found)));
+    }
+    add(row, f.path);
+  }
+}
+function pickFile(path, focus) {
+  ui().file = path;
+  closePopover();
+  renderFiles();
+  renderOutline(false);
+  if (focus) { const row = $("file-list").querySelector(".frow.on"); if (row) row.focus(); }
+}
+
+// Unticking a file means reading again without it: wait a moment, so several ticks make one request.
+let filesTimer = 0, filesRun = 0;
+function work(step) { state.working += step; renderChrome(); }
+function filesChanged() { clearTimeout(filesTimer); filesTimer = setTimeout(sendFiles, 500); }
+async function sendFiles() {
+  const mine = ++filesRun;
+  const id = state.current;
+  hide("files-error");
+  refreshing += 1;
+  work(+1);
+  const off = ui().off;
+  const result = await call("set_files", state.scan.files.filter(f => f.status === "ready" && !off.has(f.path)).map(f => f.path));
+  state.working -= 1;
+  if (mine !== filesRun || id !== state.current) { renderChrome(); return; }
+  if (failed(result)) { renderChrome(); showMessage("files-error", result ? result.error : FAILED); return; }
+  applyScan(result, true);
+}
+
+// --------------------------------------------------------------- what will be replaced: the outline
+// Like the list view in Finder: a file's columns (or, in a letter, the kinds of things found), and under each its values.
+function isAdded(f) { return f.source === "added" && f.can_keep === false; }
+function isKept(f) { return f.can_keep !== false && ui().keep.has(f.id); }
+function keptCount() { let n = 0; for (const f of state.scan.findings) if (isKept(f)) n += 1; return n; }
+function placesText(f) {
+  // For a word the user added: what happened to it in the files.
+  if (f.count > 0) return `replaced in ${plural(f.count, "place")}`;
+  if (f.already_replaced > 0) return "already replaced";
+  return "not found in your files";
+}
+function looksLikeCode(value) { return /^[A-Z][A-Z0-9]*_[A-Z0-9_]+$/.test(value); }
+function isIdle(col) { return col.kind === "KEEP" || col.kind == null; }  // a column nothing is done to
+
+// Open points: what the data does not settle. Letters are left out at levels 3 and 4, so what is only about them needs no answer there.
+function openPoints() { return state.scan.questions.filter(q => ui().level < 3 || !q.letters_only); }
+function indexPoints() { state.points = new Map(openPoints().map(q => [q.id, q])); }
+function unanswered() { let n = 0; for (const q of state.points.values()) if (!(q.id in ui().answers) && q.kind !== "info") n += 1; return n; }
+function pointState(ids) {
+  // "" no open point here, "open" at least one waits for an answer, "done" all answered
+  let any = false, open = false;
+  for (const id of ids || []) {
+    if (!state.points.has(id)) continue;
+    any = true;
+    if (!(id in ui().answers)) open = true;
+  }
+  return !any ? "" : open ? "open" : "done";
+}
+function filePoints(f) {
+  let total = 0, open = 0;
+  for (const q of state.points.values()) if ((q.files || []).includes(f.path)) { total += 1; if (!(q.id in ui().answers)) open += 1; }
+  if (!total && f.questions) return { total: f.questions, open: f.questions };
+  return { total, open };
+}
+function setAnswer(q, value) {
+  // The same answers everywhere: in the list, in the little window at a mark, and in the Open points sheet.
+  const answers = ui().answers;
+  if (answers[q.id] === value) delete answers[q.id]; else answers[q.id] = value;
+  if (q.kind === "column") refresh();
+  renderToolbar();
+  renderFiles();
+  renderOutline(true);
+}
+function optionButtons(q, after) {
+  const box = make("div", "options");
+  q.options.forEach(option => {
+    const b = button(option.label);
+    const chosen = ui().answers[q.id] === option.value;
+    b.classList.toggle("chosen", chosen);
+    b.setAttribute("aria-pressed", String(chosen));
+    b.addEventListener("click", () => { setAnswer(q, option.value); after(); });
+    box.appendChild(b);
+  });
+  return box;
+}
+
+function nodesOf(path) {
+  // The rows of one file, in the order of the file: its columns sheet by sheet, then what was found in its text.
+  if (state.nodes.has(path)) return state.nodes.get(path);
+  const out = [];
+  const o = (state.scan.outline || {})[path];
+  // An open point belongs to the files it names: the same name in another file carries no mark there.
+  const here = ids => (ids || []).filter(id => { const q = state.points.get(id); return q && (!(q.files || []).length || q.files.includes(path)); });
+  const values = list => (list || []).map(v => ({ f: state.byId.get(v.id), count: v.count })).filter(v => v.f).map(v => ({ ...v, q: here(v.f.questions) }));
+  if (o) {
+    const tables = o.tables || [], groups = o.groups || [];
+    tables.forEach((t, at) => {
+      if (tables.length > 1 || groups.length) out.push({ type: "section", label: t.name || "Table" });
+      (t.columns || []).forEach((c, i) => out.push({
+        type: "column", key: "c|" + JSON.stringify(c.ref || [path, at, i]), col: c, label: c.header || "", becomes: c.becomes || "",
+        values: values(c.values), own: c.questions || [],
+      }));
+    });
+    if (groups.length && tables.length) out.push({ type: "section", label: "Text" });
+    groups.forEach(g => out.push({ type: "group", key: `g|${path}|${g.type}`, group: g, label: g.label || g.type, becomes: g.becomes || "", values: values(g.values), own: g.questions || [] }));
+    for (const node of out) if (node.values) node.all = [...node.own, ...node.values.flatMap(v => v.q)];
+  }
+  state.nodes.set(path, out);
+  return out;
+}
+function tickState(values) {
+  // What a tickbox above several values shows: all replaced, none, or some.
+  let can = 0, kept = 0;
+  for (const v of values) if (v.f.can_keep !== false) { can += 1; if (ui().keep.has(v.f.id)) kept += 1; }
+  return !can ? "fixed" : kept === 0 ? "all" : kept === can ? "none" : "some";
+}
+
+function triangle(key, open, label) {
+  const b = button("", "tri" + (open ? " open" : ""));
+  b.dataset.fk = "t|" + key;
+  b.setAttribute("aria-expanded", String(open));
+  b.setAttribute("aria-label", `${open ? "Hide" : "Show"} what is in ${label}`);
+  const toggle = on => { if (on) ui().openRows.add(key); else ui().openRows.delete(key); renderOutline(true); };
+  b.addEventListener("click", () => toggle(!ui().openRows.has(key)));
+  b.addEventListener("keydown", e => {
+    if (e.key === "ArrowRight") { e.preventDefault(); toggle(true); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); toggle(false); }
+  });
+  return b;
+}
+function markButton(st, key, label, onClick) {
+  // One sign everywhere for an open point: orange while it waits, grey with a tick once answered.
+  const b = button("", "mark" + (st === "done" ? " done" : ""));
+  b.dataset.fk = "m|" + key;
+  b.title = st === "done" ? "Answered. Click to see or change it." : "Open point. Click to see it.";
+  b.setAttribute("aria-label", `${st === "done" ? "Answered open point" : "Open point"}: ${label}`);
+  b.appendChild(icon(st === "done" ? "done" : "mark"));
+  b.addEventListener("click", e => { e.stopPropagation(); onClick(); });
+  return b;
+}
+function cellDiv(row, cls, value) { const d = make("div", cls, value); d.setAttribute("role", "gridcell"); row.appendChild(d); return d; }
+function baseRow(cls, depth) {
+  const row = make("div", "orow " + cls);
+  row.style.setProperty("--depth", depth);
+  row.setAttribute("role", "row");
+  row.setAttribute("aria-level", String(depth + 1));
+  return row;
+}
+
+function kindCell(row, node) {
+  const cell = cellDiv(row, "c-kind");
+  if (node.type !== "column") return;
+  const c = node.col;
+  if (!c.choices || !c.choices.length) { text(cell, c.kind_label || ""); cell.title = c.kind_label || ""; return; }
+  // What the column counts as can be corrected here.
+  cell.classList.add("pick");
+  const select = make("select", "kind");
+  select.dataset.fk = "k|" + node.key;
+  select.setAttribute("aria-label", `What the column ${node.label || "without a header"} counts as`);
+  const current = c.decided != null ? c.decided : c.kind;
+  const add = (value, label) => { const o = make("option", "", label); o.value = value; select.appendChild(o); return o; };
+  if (!c.choices.some(o => o.value === current)) add(current == null ? "" : current, c.kind_label || "");
+  c.choices.forEach(o => add(o.value, o.label));
+  if (c.decided != null) add("\u0000auto", "Let Privatier decide");
+  select.value = current == null ? "" : current;
+  select.addEventListener("change", () => { select.disabled = true; setColumn(c.ref, select.value === "\u0000auto" ? null : select.value); });
+  cell.appendChild(select);
+}
+
+function nodeRow(node, depth, open) {
+  const idle = node.type === "column" && isIdle(node.col);
+  const st = pointState(node.all);
+  const row = baseRow((idle ? "idle" : "") + (st === "open" ? " has-open" : ""), depth);
+  const name = cellDiv(row, "c-name");
+  const shown = node.label || "(no header)";
+  if (node.values.length) { name.appendChild(triangle(node.key, open, shown)); row.setAttribute("aria-expanded", String(open)); }
+  else name.appendChild(make("span", "tri-gap"));
+  const label = make("span", "label", shown);
+  label.title = shown;
+  name.appendChild(label);
+  if (st) name.appendChild(markButton(st, node.key, shown, () => {
+    // The row opens itself, so the values with an open point come into view.
+    if (node.values.length) ui().openRows.add(node.key);
+    renderOutline(true);
+    if (pointState(node.own)) openPopover("m|" + node.key, node.own);
+  }));
+  kindCell(row, node);
+  const becomes = cellDiv(row, "c-becomes", node.becomes);
+  becomes.title = node.becomes;
+  cellDiv(row, "c-found", node.values.length ? String(node.values.length) : "").title = node.values.length ? plural(node.values.length, "different value") : "";
+  const act = cellDiv(row, "c-replace");
+  const state3 = tickState(node.values);
+  if (!idle && node.values.length) {
+    const box = make("input");
+    box.type = "checkbox";
+    box.dataset.fk = "x|" + node.key;
+    box.checked = state3 === "all" || state3 === "fixed";
+    box.indeterminate = state3 === "some";
+    box.disabled = state3 === "fixed";
+    box.setAttribute("aria-label", `Replace everything in ${shown}`);
+    box.title = state3 === "some" ? "Some of these are kept as written" : state3 === "none" ? "All of these are kept as written" : "All of these are replaced";
+    box.addEventListener("change", () => {
+      const keep = ui().keep;
+      for (const v of node.values) if (v.f.can_keep !== false) { if (state3 === "all") keep.add(v.f.id); else keep.delete(v.f.id); }
+      keepChanged();
+    });
+    act.appendChild(box);
+  }
+  return row;
+}
+function valueRow(v, node, depth) {
+  const f = v.f;
+  const st = pointState(v.q);
+  const kept = isKept(f);
+  const key = `${node.key}|v|${f.id}`;
+  const row = baseRow("val" + (kept ? " kept" : "") + (st === "open" ? " has-open" : ""), depth);
+  const name = cellDiv(row, "c-name");
+  name.appendChild(make("span", "tri-gap"));
+  const label = make("span", "label", f.value);
+  label.title = f.value;
+  name.appendChild(label);
+  if (st) name.appendChild(markButton(st, key, f.value, () => openPopover("m|" + key, v.q)));
+  cellDiv(row, "c-kind", "–");
+  const becomes = kept ? "kept as written" : (isAdded(f) ? placesText(f) : f.becomes || "");
+  const b = cellDiv(row, "c-becomes" + (!kept && looksLikeCode(becomes) ? " mono" : ""), becomes);
+  b.title = becomes;
+  cellDiv(row, "c-found", v.count ? `${v.count}×` : "").title = v.count ? `Found ${v.count === 1 ? "once" : v.count + " times"} here` : "";
+  const act = cellDiv(row, "c-replace");
+  const box = make("input");
+  box.type = "checkbox";
+  box.dataset.fk = "x|" + key;
+  box.checked = !kept;
+  box.setAttribute("aria-label", `Replace ${f.value}`);
+  if (f.can_keep === false) { box.disabled = true; box.title = f.keep_reason || "This is always replaced."; act.title = box.title; }
+  box.addEventListener("change", () => {
+    if (box.checked) ui().keep.delete(f.id); else ui().keep.add(f.id);
+    keepChanged();
+  });
+  act.appendChild(box);
+  return row;
+}
+function fileRow(f, depth, open, nodes) {
+  const st = pointState(nodes.flatMap(n => n.all || []));
+  const key = "f|" + f.path;
+  const row = baseRow("file" + (st === "open" ? " has-open" : ""), depth);
+  row.setAttribute("aria-expanded", String(open));
+  const name = cellDiv(row, "c-name");
+  name.append(triangle(key, open, f.name), fileIcon(f.kind));
+  const label = make("span", "label", f.name);
+  label.title = f.path;
+  name.appendChild(label);
+  if (st) name.appendChild(markButton(st, key, f.name, () => { ui().openRows.add(key); renderOutline(true); }));
+  const columns = nodes.filter(n => n.type === "column").length;
+  cellDiv(row, "c-kind", columns ? plural(columns, "column") : "Text");
+  cellDiv(row, "c-becomes", "");
+  cellDiv(row, "c-found", f.found ? String(f.found) : "");
+  cellDiv(row, "c-replace");
+  return row;
+}
+
+function renderOutline(keepView) {
+  const mine = ui();
+  const wrap = $("table-wrap");
+  const top = wrap.scrollTop;
+  const focus = document.activeElement && document.activeElement.dataset ? document.activeElement.dataset.fk : null;
+  const file = mine.file;
+  const chosen = file ? state.scan.files.find(f => f.path === file) : null;
+  const term = $("filter").value.trim().toLowerCase();
+  const rows = document.createDocumentFragment();
+  let any = false;
+
+  const addNodes = (path, depth, into) => {
+    let added = false, section = null;
+    for (const node of nodesOf(path)) {
+      if (node.type === "section") { section = node; continue; }
+      let values = node.values;
+      let open = mine.openRows.has(node.key);
+      if (term) {
+        // Searching shows the values that match, with the row they belong to opened.
+        const hits = values.filter(v => v.f.lower.includes(term));
+        if (!hits.length && !node.label.toLowerCase().includes(term)) continue;
+        if (hits.length) { values = hits; open = true; }
+      }
+      if (section) { const head = make("div", "osect", section.label); head.style.setProperty("--depth", depth); into.appendChild(head); section = null; }
+      into.appendChild(nodeRow(node, depth, open));
+      added = true;
+      if (!open) continue;
+      const limit = mine.showAll.has(node.key) ? values.length : LIMIT;
+      for (let i = 0; i < Math.min(limit, values.length); i++) into.appendChild(valueRow(values[i], node, depth + 1));
+      if (values.length > limit) {
+        const more = make("div", "omore");
+        more.style.setProperty("--depth", depth + 1);
+        const all = button(`Show all ${values.length}`, "link");
+        all.dataset.fk = "a|" + node.key;
+        all.addEventListener("click", () => { mine.showAll.add(node.key); renderOutline(true); });
+        more.appendChild(all);
+        into.appendChild(more);
+      }
+    }
+    return added;
+  };
+
+  if (chosen) {
+    if (chosen.status !== "left_out") any = addNodes(chosen.path, 0, rows);
+  } else {
+    for (const f of state.scan.files) {
+      if (f.status === "left_out") continue;
+      const nodes = nodesOf(f.path);
+      if (!nodes.length) continue;
+      const open = mine.openRows.has("f|" + f.path) || Boolean(term);
+      const inside = document.createDocumentFragment();
+      const found = open ? addNodes(f.path, 1, inside) : false;
+      if (term && !found) continue;
+      rows.appendChild(fileRow(f, 0, open, nodes));
+      rows.appendChild(inside);
+      any = true;
+    }
+  }
+  $("outline-rows").replaceChildren(rows);
+  const tables = chosen && nodesOf(chosen.path).some(n => n.type === "column");
+  text($("outline-first"), !chosen ? "File" : tables ? "Column" : "Found in the text");
+
+  let note = "";
+  if (chosen && chosen.status === "left_out") note = `This file is left out of the copy${chosen.reason ? ": " + chosen.reason : "."}`;
+  else if (chosen && mine.off.has(chosen.path)) note = "This file is not part of the copy. Tick it in the list to include it.";
+  else if (!any && term) note = "Nothing found with this in it. If something was missed, add it below.";
+  else if (!any) note = chosen ? "Nothing was found in this file that needs replacing." : "Nothing was found that needs replacing. Look through the copy before you upload it.";
+  text($("found-note"), note);
+  show("found-note", Boolean(note));
+  show("outline", any && !(chosen && mine.off.has(chosen.path)));
+  drawnAt = performance.now();
+  wrap.scrollTop = keepView ? top : 0;
+  if (focus) { const again = wrap.querySelector(`[data-fk="${CSS.escape(focus)}"]`); if (again && !again.disabled) again.focus({ preventScroll: true }); }
+  renderLine();
+}
+function renderLine() {
+  const file = ui().file;
+  const row = file ? state.scan.files.find(f => f.path === file) : null;
+  const list = file ? state.scan.findings.filter(f => f.files.includes(file)) : state.scan.findings;
+  const kept = list.filter(isKept).length;
+  const replaced = list.length - kept;
+  let line;
+  if (row) line = replaced ? `${plural(replaced, "value")} in this file will be replaced.` : "Nothing in this file will be replaced.";
+  else {
+    const files = new Set();
+    for (const f of list) if (!isKept(f)) for (const name of f.files) files.add(name);
+    line = replaced ? `${plural(replaced, "value")} in ${plural(files.size, "file")} will be replaced by codes.` : "Nothing will be replaced.";
+  }
+  if (kept) line += ` ${kept} kept as written.`;
+  text($("detail-line"), line);
+  $("detail-line").title = line;
+}
+$("filter").addEventListener("input", () => renderOutline(false));
+
+// A tick changes what is kept: shown at once, and told to the Python side a moment later, so several ticks make one request.
+let keepTimer = 0, keepRun = 0;
+function keepChanged() { renderOutline(true); clearTimeout(keepTimer); keepTimer = setTimeout(sendKeep, 600); }
+async function sendKeep() {
+  if (adding) { keepTimer = setTimeout(sendKeep, 600); return; }
+  const mine = ++keepRun;
+  const id = state.current;
+  hide("add-error");
+  refreshing += 1;
+  work(+1);
+  const result = await call("review", [...ui().keep], ui().extra);
+  state.working -= 1;
+  if (mine !== keepRun || id !== state.current) { renderChrome(); return; }
+  if (failed(result)) { renderChrome(); showMessage("add-error", result ? result.error : FAILED, "Your choice could not be saved."); return; }
+  applyScan(result, true);
+}
+async function setColumn(ref, value) {
+  const id = state.current;
+  hide("add-error");
+  refreshing += 1;
+  work(+1);
+  const result = await call("set_column", ref, value);
+  state.working -= 1;
+  if (id !== state.current) { renderChrome(); return; }
+  if (failed(result)) { renderChrome(); renderOutline(true); showMessage("add-error", result ? result.error : FAILED, "The column could not be changed."); return; }
+  applyScan(result, true);
+}
+
+// The little window at a mark: the open point and its answers.
+let popFor = null, popIds = [];
+function openPopover(fk, ids) {
+  const anchor = document.querySelector(`[data-fk="${CSS.escape(fk)}"]`);
+  popIds = (ids || []).filter(id => state.points.has(id));
+  if (!anchor || !popIds.length) { closePopover(); return; }
+  popFor = fk;
+  const pop = $("popover");
+  renderPopover();
+  pop.classList.remove("hidden");
+  const at = anchor.getBoundingClientRect();
+  const left = Math.max(8, Math.min(at.left - 24, window.innerWidth - pop.offsetWidth - 8));
+  let topAt = at.bottom + 6;
+  if (topAt + pop.offsetHeight > window.innerHeight - 8) topAt = Math.max(8, at.top - pop.offsetHeight - 6);
+  pop.style.left = left + "px";
+  pop.style.top = topAt + "px";
+  const first = pop.querySelector(".chosen") || pop.querySelector("button");
+  if (first) first.focus();
+}
+function renderPopover() {
+  const pop = $("popover");
+  pop.replaceChildren();
+  for (const id of popIds) {
+    const q = state.points.get(id);
+    const block = make("div", "q");
+    block.append(make("div", "q-say", q.text), optionButtons(q, () => {
+      // Answered: the mark turns grey. With several points here, the window stays until each has an answer.
+      if (popIds.every(x => x in ui().answers)) { const fk = popFor; closePopover(); const mark = document.querySelector(`[data-fk="${CSS.escape(fk)}"]`); if (mark) mark.focus(); }
+      else { renderPopover(); const next = $("popover").querySelector("button:not(.chosen)"); if (next) next.focus(); }
+    }));
+    pop.appendChild(block);
+  }
+  pop.appendChild(make("div", "hint", "Optional. Without an answer this stays apart, never guessed."));
+}
+function closePopover() { popFor = null; hide("popover"); }
+document.addEventListener("mousedown", e => { if (popFor && !e.target.closest("#popover, .mark")) closePopover(); });
+$("popover").addEventListener("keydown", e => {
+  if (e.key !== "Escape") return;
+  const fk = popFor;
+  closePopover();
+  const mark = document.querySelector(`[data-fk="${CSS.escape(fk)}"]`);
+  if (mark) mark.focus();
+});
+let drawnAt = 0;  // the list was just drawn again: the scroll event that follows is not the user's
+$("table-wrap").addEventListener("scroll", () => { if (popFor && performance.now() - drawnAt > 200) closePopover(); });
+
+function renderTokens() {
+  const box = $("tokens");
+  box.replaceChildren();
+  const added = new Map(state.scan.findings.filter(isAdded).map(f => [f.lower, f]));
+  ui().extra.forEach(term => {
+    const token = make("span", "token");
+    const found = added.get(term.toLowerCase());
+    token.appendChild(make("span", "cut sel", term));
+    if (found) token.appendChild(make("span", "what", placesText(found)));
+    const remove = button("", "x");
+    remove.setAttribute("aria-label", `Remove ${term}`);
+    remove.title = "Remove";
+    remove.appendChild(icon("x"));
+    remove.addEventListener("click", () => changeExtra(ui().extra.filter(t => t !== term)));
+    token.appendChild(remove);
+    box.appendChild(token);
   });
 }
-document.addEventListener("drop", e => { e.preventDefault(); dragOver(false); });
+// Adding or removing a word means reading the files again. What was chosen so far stays.
+let adding = false;
+async function changeExtra(next) {
+  if (adding) return false;
+  clearTimeout(keepTimer);  // this request carries what is kept as well
+  const id = state.current;
+  hide("add-error");
+  adding = true;
+  $("add-term").disabled = $("add-button").disabled = true;
+  refreshing += 1;  // an older preview that is still on its way no longer fits
+  work(+1);
+  const result = await call("review", [...ui().keep], next);
+  adding = false;
+  $("add-term").disabled = $("add-button").disabled = false;
+  state.working -= 1;
+  if (id !== state.current) { renderChrome(); return false; }
+  if (failed(result)) { renderChrome(); showMessage("add-error", result ? result.error : FAILED); return false; }
+  ui().extra = next;
+  applyScan(result, true);
+  return true;
+}
+async function addTerm() {
+  const input = $("add-term");
+  const term = input.value.trim();
+  if (!term) return;
+  if (term.length < 2) { showMessage("add-error", "Please enter at least 2 characters.", "A little longer, please."); return; }
+  if (ui().extra.some(t => t.toLowerCase() === term.toLowerCase())) { showMessage("add-error", "This is already on your list.", "Already added."); return; }
+  if (await changeExtra([...ui().extra, term])) { input.value = ""; input.focus(); }
+}
+$("add-button").addEventListener("click", addTerm);
+$("add-term").addEventListener("keydown", e => { if (e.key === "Enter") addTerm(); });
+$("add-term").addEventListener("input", () => hide("add-error"));
 
-// --------------------------------------------------------------- the review screen
-function buildReview() {
-  const s = state.scan;
-  text($("folder-name"), s.folder);
-  const facts = [plural(s.tables, "table")];
-  if (s.other_files) facts.push(plural(s.other_files, "other file"));
-  if (s.unsupported.length) facts.push(`${s.unsupported.length} not supported (these are left out)`);
-  text($("folder-facts"), facts.join(" · "));
-  text($("restart"), s.single ? "Choose another file" : "Choose another folder");
-  text($("again"), s.single ? "Back to this file" : "Back to this folder");
-  $("ai-warning").classList.toggle("hidden", s.used_ai);
-  buildSeg($("levels"), s.levels.map(l => ({ value: l.number, label: `${l.number}. ${l.name}`, note: l.number === 1 ? "recommended" : "" })), "radio", n => setLevel(Number(n)));
-  groupFindings();
-  renderTypeChips();
-  renderSections();
+// --------------------------------------------------------------- toolbar: protection and open points
+function allNotes() { return [...state.scan.notes, ...(state.scan.used_ai ? [] : [NO_AI])]; }
+function renderToolbar() {
+  const lv = level();
+  text($("protection-level"), `Level ${lv.number}`);
+  text($("protection-name"), ` · ${lv.name}`);
+  $("protection-button").setAttribute("aria-label", `Protection: level ${lv.number}, ${lv.name}. Change it.`);
+  show("protection-button", true);
+  show("toolbar-sep", true);
+  const total = state.points.size;
+  const open = unanswered();
+  const notes = allNotes().length;
+  const b = $("points-button");
+  show("points-button", total > 0 || notes > 0);
+  b.classList.toggle("open", open > 0);
+  $("points-icon").setAttribute("href", open ? "#i-mark" : total ? "#i-done" : "#i-info");
+  text($("points-count"), open ? String(open) : "");
+  const words = open ? `${plural(open, "open point")}: what the data does not settle` : total ? "All open points are answered" : "Good to know";
+  b.title = words;
+  b.setAttribute("aria-label", words);
+}
+$("protection-button").addEventListener("click", () => openSetup("protection"));
+$("points-button").addEventListener("click", () => openSetup("points"));
+
+// --------------------------------------------------------------- sheets: how they open and close
+function stage(name, which) { $("sheet-" + name).querySelectorAll("[data-stage]").forEach(el => el.classList.toggle("hidden", el.dataset.stage !== which)); }
+function sheetStops() { return [...$("sheet-wrap").querySelectorAll("input, button, summary, [tabindex='0']")].filter(el => el.offsetParent !== null && !el.disabled); }
+function openSheet(name) {
+  closePopover();
+  if (!state.sheet) state.opener = document.activeElement;
+  state.sheet = name;
+  $("sheet-wrap").querySelectorAll(".sheet").forEach(el => el.classList.toggle("hidden", el.id !== "sheet-" + name));
+  $("sheet-wrap").classList.remove("hidden");
+  $("window").setAttribute("inert", "");
+  focusSheet();
+}
+function focusSheet() {
+  const stops = sheetStops();
+  const first = stops.find(el => el.tagName === "INPUT" && el.type !== "checkbox" && el.type !== "search") || stops.find(el => el.classList.contains("primary")) || stops[0];
+  if (first) first.focus();
+}
+function closeSheet() {
+  if (state.locked) return;
+  state.sheet = null;
+  $("password").value = $("password2").value = $("restore-password").value = "";
+  hide("sheet-wrap");
+  $("window").removeAttribute("inert");
+  if (state.opener && document.contains(state.opener)) state.opener.focus();
+  if (state.scan && !state.busy) { renderToolbar(); renderFiles(); renderOutline(true); }
+}
+$("sheet-wrap").addEventListener("click", e => { if (e.target.closest("[data-close]")) closeSheet(); });
+$("sheet-wrap").addEventListener("keydown", e => {
+  if (e.key === "Escape") { e.preventDefault(); closeSheet(); return; }
+  if (e.key === "Enter" && e.target.tagName === "INPUT" && ["text", "password"].includes(e.target.type)) {
+    e.preventDefault();
+    const go = sheetStops().find(el => el.classList.contains("primary"));
+    if (go) go.click();
+    return;
+  }
+  if (e.key !== "Tab") return;
+  const stops = sheetStops();  // the Tab key stays inside the sheet
+  if (!stops.length) { e.preventDefault(); return; }
+  const at = stops.indexOf(document.activeElement);
+  const next = e.shiftKey ? (at <= 0 ? stops.length - 1 : at - 1) : (at === stops.length - 1 ? 0 : at + 1);
+  e.preventDefault();
+  stops[next].focus();
+});
+
+// --------------------------------------------------------------- the sheet that comes up after reading: protection, then open points
+function openSetup(step) {
+  $("column-search").value = "";
+  hide("level-error");
+  buildCards();
   renderColumns();
   renderLevel();
-  renderFindings();
-  renderChips();
-  renderQuestions();
-  $("notes").replaceChildren(...s.notes.map(n => make("li", "", n)));
-  $("notes-box").classList.toggle("hidden", !s.notes.length);
+  renderPoints();
+  stage("setup", step);
+  openSheet("setup");
+  if (step === "protection") { const on = $("levels").querySelector(".on"); if (on) on.focus(); }
 }
+$("setup-continue").addEventListener("click", () => { stage("setup", "points"); focusSheet(); });
+$("setup-back").addEventListener("click", () => { stage("setup", "protection"); const on = $("levels").querySelector(".on"); if (on) on.focus(); });
 
-function renderSections() {
-  for (const name of Object.keys(state.sections)) {
-    $("sect-" + name).classList.toggle("open", state.sections[name]);
-    $("head-" + name).setAttribute("aria-expanded", String(state.sections[name]));
-  }
-}
-for (const name of Object.keys(state.sections)) {
-  $("head-" + name).addEventListener("click", () => { state.sections[name] = !state.sections[name]; renderSections(); });
-}
-
-function renderTypeChips() {
-  const chips = $("type-chips");
-  chips.replaceChildren();
-  chips.classList.toggle("hidden", !state.groups.length);
-  for (const g of state.groups) {
-    const chip = button(g.items.length === 1 ? g.label : manyOf(g.label), "tchip");
-    chip.appendChild(make("span", "", String(g.items.length)));
-    chip.title = "Show these";
-    chip.addEventListener("click", () => {
-      // Opens "What was found" at this group.
-      state.sections.found = true;
-      state.open.add(g.type);
-      $("find-search").value = "";
-      renderSections();
-      renderFindings();
-      const head = [...$("find-groups").querySelectorAll(".group-head")].find(h => h.dataset.type === g.type);
-      if (!head) return;
-      const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      setTimeout(() => { head.scrollIntoView({ block: "center", behavior: calm ? "auto" : "smooth" }); head.focus({ preventScroll: true }); }, calm ? 0 : 260);
+function buildCards() {
+  const root = $("levels");
+  root.replaceChildren();
+  state.scan.levels.forEach((l, i) => {
+    const card = button("", "card");
+    card.setAttribute("role", "radio");
+    card.dataset.value = l.number;
+    const name = make("span", "name", `${l.number} · ${l.name}`);
+    if (l.number === 1) name.appendChild(make("span", "tag", "recommended"));
+    card.append(make("span", "radio"), name, make("span", "sum", l.summary), make("span", "facts"));
+    card.addEventListener("click", () => setLevel(l.number));
+    card.addEventListener("keydown", e => {
+      const step = ["ArrowRight", "ArrowDown"].includes(e.key) ? 1 : ["ArrowLeft", "ArrowUp"].includes(e.key) ? -1 : 0;
+      if (!step) return;
+      e.preventDefault();
+      const cards = root.querySelectorAll(".card");
+      const target = cards[(i + step + cards.length) % cards.length];
+      target.focus();
+      target.click();
     });
-    chips.appendChild(chip);
-  }
+    root.appendChild(card);
+  });
 }
-
-function setLevel(number) { state.level = number; renderLevel(); renderQuestions(); }
-
+function setLevel(number) {
+  ui().level = number;
+  indexPoints();
+  renderLevel();
+  renderPoints();
+}
+function figureText(p) {
+  // The table where most people can be singled out. Never better than the worst.
+  if (!p.worst) return "no number: no sex, age or date columns left to compare";
+  return `${p.worst.percent.toFixed(p.worst.percent > 0 && p.worst.percent < 10 ? 1 : 0)}% of ${p.worst.unit} can still be singled out`;
+}
 function renderLevel() {
-  const level = state.scan.levels[state.level - 1];
-  const p = state.preview[String(state.level)];
-  setSeg($("levels"), state.level);
-  text($("state-level"), `${level.number} · ${level.name}${level.number === 1 ? " (recommended)" : ""}`);
-  text($("level-summary"), level.summary);
-
-  // The big number: the table where most people can be singled out. Never better than the worst.
-  if (p.worst) {
-    text($("big-number"), `${p.worst.percent.toFixed(p.worst.percent > 0 && p.worst.percent < 10 ? 1 : 0)}%`);
-    text($("big-caption"), `of ${p.worst.unit} can still be singled out, in the most exposed table`);
-  } else {
-    text($("big-number"), "?");
-    text($("big-caption"), "No sex, age or date columns left to compare, so the check cannot give a number");
-  }
-  const pill = $("label");
-  text(pill, p.anonymous ? "Would pass: " + p.label : p.label);
-  pill.className = "pill sel " + (p.anonymous ? "good" : "warn");
+  const lv = level();
+  const p = state.preview[String(lv.number)];
+  $("levels").querySelectorAll(".card").forEach(card => {
+    const l = state.scan.levels[Number(card.dataset.value) - 1];
+    const on = l.number === lv.number;
+    card.classList.toggle("on", on);
+    card.setAttribute("aria-checked", String(on));
+    card.tabIndex = on ? 0 : -1;
+    const key = l.keeps_key ? "Key kept: you can put the real values back" : "No key: nobody can trace the codes back";
+    text(card.querySelector(".facts"), `${key} · ${figureText(state.preview[String(l.number)])}`);
+  });
+  const label = $("label");
+  text(label, p.anonymous ? "Would pass: " + p.label : p.label);
+  label.className = "sel " + (p.anonymous ? "good-text" : "warn-text");
   $("reasons").replaceChildren(...p.reasons.slice(0, 8).map(r => make("li", "", r)));
   if (p.reasons.length > 8) $("reasons").appendChild(make("li", "", `and ${p.reasons.length - 8} more`));
 
-  const notChecked = $("not-checked");
-  notChecked.classList.toggle("hidden", !p.could_not_check.length);
+  show("not-checked", p.could_not_check.length > 0);
   if (p.could_not_check.length) {
-    text(notChecked, "Could not check, which does not mean safe: " + p.could_not_check.map(t => `${t.title} (${t.reason})`).join("; "));
+    text($("not-checked"), "Could not check, which does not mean safe: " + p.could_not_check.map(t => `${t.title} (${t.reason})`).join("; "));
   }
 
   const rows = $("table-rows");
@@ -979,22 +1540,21 @@ function renderLevel() {
     rows.appendChild(tr);
   });
   renderLost(p);
-  renderExportNote();
+  // With open points a second step follows. Without, this sheet is done with one click.
+  const more = state.points.size > 0;
+  show("setup-continue", more);
+  $("setup-done").classList.toggle("primary", !more);
 }
-
 function renderLost(p) {
   const columns = p.lost.length;
-  const now = [columns ? plural(columns, "column") : "No columns"];
-  if (p.left_out.length) now.push(`${plural(p.left_out.length, "file")} left out`);
-  text($("state-lost"), now.join(" · "));
-  const extras = [columns ? `At level ${state.level}, ${plural(columns, "column")} lose${columns === 1 ? "s" : ""} detail.` : `At level ${state.level}, no column loses detail.`];
+  const extras = [columns ? `At level ${ui().level}, ${plural(columns, "column")} lose${columns === 1 ? "s" : ""} detail.` : `At level ${ui().level}, no column loses detail.`];
   if (p.blanked_rows) extras.push(`Details will be blanked in ${plural(p.blanked_rows, "row")} that would still stand out.`);
   if (p.left_out.length) extras.push(`${plural(p.left_out.length, "file")} will be left out: ${p.left_out.slice(0, 5).join(", ")}${p.left_out.length > 5 ? " and others" : ""}.`);
-  if (!columns && extras.length === 1 && state.level === 1) extras.push("Every other cell comes out exactly as it went in. Birth dates become the year, as always.");
+  if (!columns && extras.length === 1 && ui().level === 1) extras.push("Every other cell comes out exactly as it went in. Birth dates become the year, as always.");
   text($("lost-intro"), extras.join(" "));
-  $("lost-box").classList.toggle("hidden", !columns);
+  show("lost-box", columns > 0);
   const anyText = p.lost.some(l => l.free_text);
-  $("keep-head").classList.toggle("hidden", !anyText);
+  show("keep-head", anyText);
   const rows = $("lost-rows");
   rows.replaceChildren();
   p.lost.forEach(item => {
@@ -1007,11 +1567,11 @@ function renderLost(p) {
       if (item.free_text) {
         const box = make("input");
         box.type = "checkbox";
-        box.checked = hasRef(state.kept, item.ref);
+        box.checked = hasRef(ui().kept, item.ref);
         box.title = "This column is not free text: keep it. The result will then not get the strongest label.";
         box.setAttribute("aria-label", `Keep ${item.header}`);
         box.addEventListener("change", () => {
-          state.kept = box.checked ? [...state.kept, item.ref] : state.kept.filter(r => !sameRef(r, item.ref));
+          ui().kept = box.checked ? [...ui().kept, item.ref] : ui().kept.filter(r => !sameRef(r, item.ref));
           refresh();
         });
         td.appendChild(box);
@@ -1020,21 +1580,20 @@ function renderLost(p) {
     rows.appendChild(tr);
   });
 }
-
 function renderColumns() {
   const term = $("column-search").value.trim().toLowerCase();
   const list = $("column-list");
   list.replaceChildren();
   state.scan.columns
-    .filter(c => !term || c.header.toLowerCase().includes(term) || hasRef(state.ticked, c.ref))
+    .filter(c => !term || c.header.toLowerCase().includes(term) || hasRef(ui().ticked, c.ref))
     .slice(0, 300)
     .forEach(c => {
-      const label = make("label", "check-line small");
+      const label = make("label", "check-line");
       const box = make("input");
       box.type = "checkbox";
-      box.checked = hasRef(state.ticked, c.ref);
+      box.checked = hasRef(ui().ticked, c.ref);
       box.addEventListener("change", () => {
-        state.ticked = box.checked ? [...state.ticked, c.ref] : state.ticked.filter(r => !sameRef(r, c.ref));
+        ui().ticked = box.checked ? [...ui().ticked, c.ref] : ui().ticked.filter(r => !sameRef(r, c.ref));
         refresh();
       });
       const name = make("span", "", `${c.header} `);
@@ -1042,372 +1601,118 @@ function renderColumns() {
       label.append(box, name);
       list.appendChild(label);
     });
-  if (!list.children.length) list.appendChild(make("div", "small muted", "No column with this name."));
+  if (!list.children.length) list.appendChild(make("div", "muted", "No column with this name."));
 }
 $("column-search").addEventListener("input", renderColumns);
 
 let refreshing = 0;
 async function refresh() {
   const mine = ++refreshing;
-  hide("review-error");
-  const preview = await call("preview", state.answers, state.ticked, state.kept);
-  if (mine !== refreshing) return;
-  if (!preview || preview.error) {
-    showMessage("review-error", preview ? preview.error : FAILED);
-    return;
-  }
+  const id = state.current;
+  hide("level-error");
+  const preview = await call("preview", ui().answers, ui().ticked, ui().kept);
+  if (mine !== refreshing || id !== state.current) return;
+  if (failed(preview)) { showMessage("level-error", preview ? preview.error : FAILED); return; }
   state.preview = preview;
-  renderLevel();
+  if (state.sheet === "setup") renderLevel();
+  if (!state.busy) renderToolbar();
 }
 
-// --------------------------------------------------------------- what was found
-function groupFindings() {
-  const groups = new Map();
-  for (const f of state.scan.findings || []) {
-    let group = groups.get(f.type);
-    if (!group) groups.set(f.type, group = { type: f.type, label: f.label || f.type, items: [] });
-    f.lower = String(f.value).toLowerCase();
-    group.items.push(f);
-  }
-  state.groups = [...groups.values()];
-}
-function isKept(f) { return f.can_keep && state.keep.has(f.id); }
-function keptCount() {
-  let n = 0;
-  for (const g of state.groups) for (const f of g.items) if (isKept(f)) n += 1;
-  return n;
-}
-function renderKept() {
-  // Everything that depends on what is switched off: badges, the lines at the top and at the bottom.
-  const files = new Set();
-  let total = 0, kept = 0;
-  for (const g of state.groups) {
-    let here = 0;
-    for (const f of g.items) {
-      total += 1;
-      if (isKept(f)) here += 1; else for (const file of f.files) files.add(file);
-    }
-    kept += here;
-    const badge = state.badges.get(g.type);
-    if (badge) text(badge, here ? `${here} kept` : "").classList.toggle("hidden", !here);
-  }
-  const replaced = total - kept;
-  text($("summary-line"), replaced
-    ? `${plural(replaced, "detail")} in ${plural(files.size, "file")} will be replaced by codes. Your originals stay untouched.`
-    : "Nothing will be replaced. Your originals stay untouched.");
-  const now = [plural(total, "value")];
-  if (kept) now.push(`${kept} kept`);
-  if (state.extra.length) now.push(`${state.extra.length} added`);
-  text($("state-found"), now.join(" · "));
-  text($("find-kept"), kept ? `${plural(kept, "value")} switched off: kept as ${kept === 1 ? "it is" : "they are"}` : "");
-  renderExportNote();
-}
-
-function isAdded(f) { return f.source === "added" && !f.can_keep; }
-function placesText(f) {
-  // For a word the user added: what happened to it in the files.
-  if (f.count > 0) return `replaced in ${plural(f.count, "place")}`;
-  if (f.already_replaced > 0) return "already replaced";
-  return "not found in your files";
-}
-
-function findingRow(f) {
-  const row = make("div", "frow");
-  const value = make("div", "fval sel", f.value);
-  value.title = f.value;
-  const count = make("span", "fcount", `${f.count}×`);
-  count.title = `Found ${f.count === 1 ? "once" : f.count + " times"}`;
-  const files = button(plural(f.files.length, "file"), "ffiles");
-  files.title = f.files.join("\n");
-  files.setAttribute("aria-expanded", "false");
-  files.addEventListener("click", () => {
-    const open = row.querySelector(".ffilelist");
-    if (open) open.remove(); else row.appendChild(make("div", "ffilelist", f.files.join(" · ")));
-    files.setAttribute("aria-expanded", String(!open));
+// --------------------------------------------------------------- open points, and what is good to know
+function renderPoints() {
+  const list = $("points-list");
+  const focus = document.activeElement && list.contains(document.activeElement) ? document.activeElement.dataset.fk : null;
+  list.replaceChildren();
+  const points = [...state.points.values()];
+  points.forEach(q => {
+    const done = q.id in ui().answers;
+    const block = make("div", "point" + (done ? " done" : ""));
+    const body = make("div");
+    const where = (q.files || []).slice(0, 3).join(", ") + ((q.files || []).length > 3 ? ` and ${q.files.length - 3} more` : "");
+    if (where) body.appendChild(make("div", "small muted sel", where));
+    body.appendChild(make("div", "q-say", q.text));
+    const options = optionButtons(q, renderPoints);
+    options.querySelectorAll("button").forEach((b, i) => { b.dataset.fk = `p|${q.id}|${i}`; });
+    body.appendChild(options);
+    block.append(icon(done ? "done" : "mark"), body);
+    list.appendChild(block);
   });
-  const act = make("div", "fact");
-  if (f.can_keep) {
-    const word = make("span", "", "Replace");
-    const paint = () => { const kept = state.keep.has(f.id); row.classList.toggle("kept", kept); text(word, kept ? "Kept as it is" : "Replace"); };
-    act.append(word, makeSwitch(!state.keep.has(f.id), `Replace ${f.value}`, on => {
-      if (on) state.keep.delete(f.id); else state.keep.add(f.id);
-      paint();
-      renderKept();
-    }));
-    paint();
-  } else if (isAdded(f)) {
-    act.append(make("span", "", placesText(f)));  // removed with its chip below, so no switch here
-  } else {
-    act.append(icon("lock"), make("span", "", "whole column is replaced"));
-    act.title = "This value comes from a column that is replaced as a whole.";
-  }
-  const nowhere = !f.files.length;  // an added word that is not in the files: nothing to count or list
-  row.append(value, make("span", "fsrc", SOURCES[f.source] || ""), nowhere ? make("span") : count, nowhere ? make("span") : files, act);
-  return row;
+  const notes = allNotes();
+  text($("points-title"), points.length ? "Open points" : "Good to know");
+  show("points-intro", points.length > 0);
+  show("points-list", points.length > 0);
+  show("notes-title", points.length > 0 && notes.length > 0);
+  show("notes", notes.length > 0);
+  $("notes").replaceChildren(...notes.map(n => make("li", "", n)));
+  if (focus) { const again = list.querySelector(`[data-fk="${CSS.escape(focus)}"]`); if (again) again.focus(); }
 }
 
-function renderFindings() {
-  const all = state.scan.findings || [];
-  const term = $("find-search").value.trim().toLowerCase();
-  text($("find-intro"), all.length
-    ? "Everything listed here is replaced in the copy. Switch one off to keep it as it is, for example the name of a method or a hospital you need."
-    : "Nothing was found that needs replacing. Look through the copy before you upload it.");
-  $("find-area").classList.toggle("hidden", !all.length);
-  const box = $("find-groups");
-  box.replaceChildren();
-  state.badges = new Map();
-  for (const g of state.groups) {
-    const items = term ? g.items.filter(f => f.lower.includes(term)) : g.items;
-    if (!items.length) continue;
-    const open = term ? !state.closed.has(g.type) : state.open.has(g.type);
-    const group = make("div", "group");
-    const head = button("", "group-head" + (open ? " open" : ""));
-    head.setAttribute("aria-expanded", String(open));
-    head.dataset.type = g.type;
-    const badge = make("span", "group-kept hidden");
-    state.badges.set(g.type, badge);
-    head.append(
-      make("span", "chevron"),
-      make("span", "group-name", g.items.length === 1 ? g.label : manyOf(g.label)),
-      make("span", "group-count", term ? `${items.length} of ${g.items.length}` : String(g.items.length)),
-      badge,
-    );
-    head.addEventListener("click", () => {
-      const set = term ? state.closed : state.open;
-      const wasOpen = term ? !set.has(g.type) : set.has(g.type);
-      if (wasOpen === Boolean(term)) set.add(g.type); else set.delete(g.type);
-      renderFindings();
-      const again = [...$("find-groups").querySelectorAll(".group-head")].find(h => h.dataset.type === g.type);
-      if (again) again.focus();
-    });
-    group.appendChild(head);
-    if (open) {
-      const body = make("div", "group-body");
-      const limit = state.limits[g.type] || PAGE;
-      const shown = items.slice(0, limit);
-      shown.forEach((f, i) => { const row = findingRow(f); if (i === shown.length - 1) row.classList.add("last"); body.appendChild(row); });
-      if (items.length > limit) {
-        const more = button(`Show ${Math.min(PAGE, items.length - limit)} more (${items.length - limit} not shown)`, "btn plain more");
-        more.addEventListener("click", () => { state.limits[g.type] = limit + PAGE; renderFindings(); });
-        body.appendChild(more);
-      }
-      group.appendChild(body);
-    }
-    box.appendChild(group);
-  }
-  if (!box.children.length) box.appendChild(make("div", "empty", "Nothing found with this in it. If something was missed, add it below."));
-  renderKept();
-}
-$("find-search").addEventListener("input", () => { state.closed = new Set(); state.limits = {}; renderFindings(); });
-
-function renderChips() {
-  const chips = $("chips");
-  chips.replaceChildren();
-  chips.classList.toggle("hidden", !state.extra.length);
-  const added = new Map((state.scan.findings || []).filter(isAdded).map(f => [f.lower, f]));
-  state.extra.forEach(term => {
-    const chip = make("span", "chip");
-    const found = added.get(term.toLowerCase());
-    const remove = button("", "chip-x");
-    remove.setAttribute("aria-label", `Remove ${term}`);
-    remove.title = "Remove";
-    remove.appendChild(icon("x"));
-    remove.disabled = state.reviewing;
-    remove.addEventListener("click", () => changeExtra(state.extra.filter(t => t !== term)));
-    chip.appendChild(make("span", "", term));
-    if (found) chip.appendChild(make("span", "chip-note", placesText(found)));
-    chip.appendChild(remove);
-    chips.appendChild(chip);
-  });
-}
-
-function setReviewing(on) {
-  state.reviewing = on;
-  $("add-spinner").classList.toggle("hidden", !on);
-  $("add-wait").classList.toggle("hidden", !on);
-  $("add-term").disabled = $("add-button").disabled = $("export").disabled = on;
-  $("chips").querySelectorAll("button").forEach(b => { b.disabled = on; });
-}
-
-// Adding or removing a word means reading the files again. What was chosen so far stays.
-async function changeExtra(next) {
-  if (state.reviewing) return false;
-  hide("add-error");
-  setReviewing(true);
-  refreshing += 1;  // an older preview that is still on its way no longer fits
-  const result = await call("review", [...state.keep], next);
-  setReviewing(false);
-  if (!result || result.error) {
-    showMessage("add-error", result ? result.error : FAILED);
-    return false;
-  }
-  const ids = new Set(result.questions.map(q => q.id));
-  state.answers = Object.fromEntries(Object.entries(state.answers).filter(([id]) => ids.has(id)));
-  state.extra = next;
-  state.scan = result;
-  state.preview = result.preview;
-  buildReview();
-  if (Object.keys(state.answers).length || state.ticked.length || state.kept.length) refresh();
-  return true;
-}
-async function addTerm() {
-  const input = $("add-term");
-  const term = input.value.trim();
-  if (!term) return;
-  if (term.length < 2) { showMessage("add-error", "Please enter at least 2 characters.", "A little longer, please"); return; }
-  if (state.extra.some(t => t.toLowerCase() === term.toLowerCase())) { showMessage("add-error", "This is already on your list.", "Already added"); return; }
-  if (await changeExtra([...state.extra, term])) { input.value = ""; input.focus(); }
-}
-$("add-button").addEventListener("click", addTerm);
-$("add-term").addEventListener("keydown", e => { if (e.key === "Enter") addTerm(); });
-$("add-term").addEventListener("input", () => hide("add-error"));
-
-// --------------------------------------------------------------- questions, one by one
-function openQuestions() {
-  // Letters are left out at levels 3 and 4, so what is only about them no longer needs an answer.
-  return state.scan.questions.filter(q => state.level < 3 || !q.letters_only);
-}
-function unanswered() { return openQuestions().filter(q => !(q.id in state.answers) && q.kind !== "info").length; }
-
-function renderQuestions() {
-  const questions = openQuestions();
-  $("questions-card").classList.toggle("hidden", !questions.length);
-  $("summary-quiet").classList.toggle("hidden", questions.length > 0);
-  renderExportNote();
-  if (!questions.length) return;
-  const open = questions.filter(q => !(q.id in state.answers)).length;
-  const folded = open === 0 && !state.showAnswers;
-  $("questions-card").classList.toggle("attention", open > 0);
-  $("questions-open").classList.toggle("hidden", folded);
-  $("questions-done").classList.toggle("hidden", !folded);
-  if (folded) return;
-  text($("questions-title"), questions.length === 1 ? "1 short question" : `${questions.length} short questions`);
-  $("questions-hide").classList.toggle("hidden", open > 0);
-  state.current = Math.max(0, Math.min(state.current, questions.length - 1));
-  const q = questions[state.current];
-  text($("question-where"), q.files.slice(0, 3).join(", ") + (q.files.length > 3 ? ` and ${q.files.length - 3} more` : ""));
-  text($("question-text"), q.text);
-  const options = $("question-options");
-  const hadFocus = options.contains(document.activeElement);
-  options.replaceChildren();
-  q.options.forEach(option => {
-    const b = button(option.label);
-    const chosen = state.answers[q.id] === option.value;
-    b.classList.toggle("chosen", chosen);
-    b.setAttribute("aria-pressed", String(chosen));
-    b.addEventListener("click", () => {
-      const before = questions.filter(x => !(x.id in state.answers)).length;
-      state.answers[q.id] = option.value;
-      if (q.kind === "column") refresh();
-      if (state.current < questions.length - 1) state.current += 1;
-      // The last open answer folds the card to one line.
-      if (before > 0 && questions.every(x => x.id in state.answers)) state.showAnswers = false;
-      renderQuestions();
-      if (!$("questions-done").classList.contains("hidden")) $("questions-review").focus();
-    });
-    options.appendChild(b);
-  });
-  if (hadFocus && options.firstChild) (options.querySelector(".chosen") || options.firstChild).focus();
-  text($("question-count"), `Question ${state.current + 1} of ${questions.length}`);
-  $("previous").disabled = state.current === 0;
-  $("next").disabled = state.current === questions.length - 1;
-  text($("next"), q.id in state.answers ? "Next" : "Skip for now");
-}
-$("previous").addEventListener("click", () => { state.current -= 1; renderQuestions(); });
-$("next").addEventListener("click", () => { state.current += 1; renderQuestions(); });
-$("questions-review").addEventListener("click", () => { state.showAnswers = true; state.current = 0; renderQuestions(); $("questions-hide").focus(); });
-$("questions-hide").addEventListener("click", () => { state.showAnswers = false; renderQuestions(); $("questions-review").focus(); });
-
-function renderExportNote() {
-  if (!state.scan) return;
-  const level = state.scan.levels[state.level - 1];
-  const parts = [`Level ${level.number}: ${level.name}`];
-  const kept = keptCount();
-  if (kept) parts.push(`${plural(kept, "value")} kept as ${kept === 1 ? "it is" : "they are"}`);
-  if (state.extra.length) parts.push(`${plural(state.extra.length, "word")} added by you`);
-  const open = unanswered();
-  if (open) parts.push(`${plural(open, "question")} unanswered`);
-  text($("export-summary"), parts.join(" · "));
-}
-
-// --------------------------------------------------------------- making the copy: the sheet
-function setBehind(inert) { for (const id of ["topbar", "main", "actionbar"]) { if (inert) $(id).setAttribute("inert", ""); else $(id).removeAttribute("inert"); } }
+// --------------------------------------------------------------- the copy sheet
 function showPasswords(on) {
   $("password").type = $("password2").type = on ? "text" : "password";
   $("eye").setAttribute("aria-pressed", String(on));
   $("eye").setAttribute("aria-label", on ? "Hide the password" : "Show the password");
   $("eye-icon").setAttribute("href", on ? "#i-eye-off" : "#i-eye");
 }
-function openSheet(error, title) {
-  const level = state.scan.levels[state.level - 1];
+$("eye").addEventListener("click", () => showPasswords($("password").type === "password"));
+function openCopy() {
+  const lv = level();
   const known = state.scan.has_key;
-  text($("sheet-title"), !level.keeps_key ? "Make the copy without a key?" : known ? "Enter the password of your key" : "Choose a password for your key");
-  text($("sheet-note"), !level.keeps_key
+  text($("copy-title"), !lv.keeps_key ? "Make the copy without a key?" : known ? "Enter the password of your key" : "Choose a password for your key");
+  text($("copy-note"), !lv.keeps_key
     ? "No key is kept at this level, so nobody, including you, can trace these codes back. Your originals stay where they are."
     : known
       ? "This folder already has a key. Enter its password, so that the same patients keep the same codes."
       : "Choose a password for the key file. Without it the codes cannot be traced back, and it cannot be recovered.");
-  $("sheet-fields").classList.toggle("hidden", !level.keeps_key);
+  show("copy-fields", lv.keeps_key);
   $("password2").parentElement.classList.toggle("hidden", known);
   $("password").value = $("password2").value = "";
   showPasswords(false);
-  if (error) showMessage("sheet-error", error, title); else hide("sheet-error");
-  state.sheet = true;
-  $("sheet").classList.remove("hidden");
-  setBehind(true);
-  (level.keeps_key ? $("password") : $("sheet-go")).focus();
+  const parts = [`Level ${lv.number} · ${lv.name}`];
+  const kept = keptCount();
+  if (kept) parts.push(`${plural(kept, "value")} kept as written`);
+  if (ui().extra.length) parts.push(`${plural(ui().extra.length, "word")} added by you`);
+  const open = unanswered();
+  if (open) parts.push(`${plural(open, "open point")} not answered: what is unclear stays apart`);
+  text($("copy-line"), parts.join(" · ") + ".");
+  hide("copy-error");
+  stage("copy", "form");
+  openSheet("copy");
 }
-function closeSheet(focusBack) {
-  state.sheet = false;
-  $("password").value = $("password2").value = "";
-  hide("sheet");
-  setBehind(false);
-  if (focusBack) $("export").focus();
-}
-function sheetStops() { return [...$("sheet").querySelectorAll("input, button")].filter(el => el.offsetParent !== null && !el.disabled); }
-
-async function confirmSheet() {
-  const level = state.scan.levels[state.level - 1];
+$("copy-button").addEventListener("click", openCopy);
+$("copy-go").addEventListener("click", async () => {
+  const lv = level();
+  const mine = ui();
   let password = "";
-  if (level.keeps_key) {
+  if (lv.keeps_key) {
     password = $("password").value;
-    if (password.length < 8) { showMessage("sheet-error", "Please use a password of at least 8 characters.", "A little longer, please"); $("password").focus(); return; }
-    if (!state.scan.has_key && password !== $("password2").value) { showMessage("sheet-error", "The two passwords do not match.", "Please check the password"); $("password2").focus(); return; }
+    if (password.length < 8) { showMessage("copy-error", "Please use a password of at least 8 characters.", "A little longer, please."); $("password").focus(); return; }
+    if (!state.scan.has_key && password !== $("password2").value) { showMessage("copy-error", "The two passwords do not match.", "Please check the password."); $("password2").focus(); return; }
   }
-  closeSheet(false);
-  const result = await withBusy("Writing the copy and checking it", "export",
-    state.level, password, state.answers, state.ticked, state.kept, [...state.keep], state.extra);
+  stage("copy", "working");
+  state.locked = true;
+  const result = await withStatus("Writing the copy and checking it", "export",
+    mine.level, password, mine.answers, mine.ticked, mine.kept, [...mine.keep], mine.extra);
+  state.locked = false;
+  $("password").value = $("password2").value = "";
   if (result.error) {
-    go("review");
-    openSheet(result.error);
+    stage("copy", "form");
+    showMessage("copy-error", result.error);
+    focusSheet();
     return;
   }
-  if (!state.scan.has_key && result.key_dir) state.scan.has_key = true;
+  if (result.key_dir) state.scan.has_key = true;
   buildDone(result);
-  go("done");
-}
-$("export").addEventListener("click", () => { if (!state.reviewing) openSheet(); });
-$("sheet-cancel").addEventListener("click", () => closeSheet(true));
-$("sheet-go").addEventListener("click", confirmSheet);
-$("eye").addEventListener("click", () => showPasswords($("password").type === "password"));
-$("sheet").addEventListener("keydown", e => {
-  if (e.key === "Escape") { e.preventDefault(); closeSheet(true); return; }
-  if (e.key === "Enter" && e.target.tagName === "INPUT") { e.preventDefault(); confirmSheet(); return; }
-  if (e.key !== "Tab") return;
-  const stops = sheetStops();  // the Tab key stays inside the sheet
-  const at = stops.indexOf(document.activeElement);
-  const next = e.shiftKey ? (at <= 0 ? stops.length - 1 : at - 1) : (at === stops.length - 1 ? 0 : at + 1);
-  e.preventDefault();
-  stops[next].focus();
+  stage("copy", "result");
+  $("finder").focus();
 });
 
 function fileList(items) { return items.map(s => `${s.file} (${s.reason})`).join("; "); }
-
 function buildDone(r) {
   state.output = r.output;
-  const pill = $("done-label");
-  text(pill, r.label);
-  pill.className = "pill sel " + (r.anonymous ? "good" : "warn");
+  const label = $("done-label");
+  text(label, r.label);
+  label.className = "sel " + (r.anonymous ? "good-text" : "warn-text");
   $("done-reasons").replaceChildren(...r.reasons.map(x => make("li", "", x)));
   const rows = $("done-rows");
   rows.replaceChildren();
@@ -1422,154 +1727,145 @@ function buildDone(r) {
     }
     rows.appendChild(tr);
   });
-  const kept = $("done-kept");
-  kept.classList.toggle("hidden", !r.kept);
-  text(kept, r.kept ? `${plural(r.kept, "value")} ${r.kept === 1 ? "was" : "were"} kept as ${r.kept === 1 ? "it is" : "they are"}, as you chose.` : "");
-  const left = $("done-left-out");
-  left.classList.toggle("hidden", !r.skipped.length);
-  text(left, r.skipped.length ? `Left out of the copy: ${fileList(r.skipped)}` : "");
-  const errors = $("done-errors");
-  errors.classList.toggle("hidden", !r.errors.length);
-  text(errors, r.errors.length ? `Not in the copy: ${fileList(r.errors)}` : "");
+  show("done-kept", Boolean(r.kept));
+  text($("done-kept"), r.kept ? `${plural(r.kept, "value")} ${r.kept === 1 ? "was" : "were"} kept as written, as you chose.` : "");
+  show("done-left-out", r.skipped.length > 0);
+  text($("done-left-out"), r.skipped.length ? `Left out of the copy: ${fileList(r.skipped)}` : "");
+  show("done-errors", r.errors.length > 0);
+  text($("done-errors"), r.errors.length ? `Not in the copy: ${fileList(r.errors)}` : "");
   $("done-notes").replaceChildren(...r.notes.map(n => make("li", "", n)));
-  text($("done-output"), r.output);
-  $("done-key-line").classList.toggle("hidden", !r.key_dir);
-  $("next-restore").classList.toggle("hidden", !r.key_dir);
-  text($("done-key"), r.key_dir || "");
+  text($("done-where"), r.output_name ? `Privatier/${r.output_name}` : r.output);
+  $("done-where").title = r.output;
+  show("next-restore", Boolean(r.key_dir));
+  text($("done-key"), r.key_dir || "none at this level");
 }
-
 $("finder").addEventListener("click", () => call("show_in_finder", state.output));
-$("again").addEventListener("click", () => { buildReview(); go("review"); });
-$("another").addEventListener("click", () => go("start"));
-$("restart").addEventListener("click", () => go("start"));
 
-// --------------------------------------------------------------- restore
+// --------------------------------------------------------------- the restore sheet
 function renderRestore() {
   const r = state.restore;
-  const password = $("restore-password").value;
-  $("restore-drop").classList.toggle("hidden", r.paths.length > 0);
-  $("restore-chosen").classList.toggle("hidden", !r.paths.length);
+  show("restore-drop", !r.paths.length);
+  show("restore-chosen", r.paths.length > 0);
   if (r.info) {
     text($("restore-name"), r.info.name);
     text($("restore-count"), plural(r.info.files, "file"));
   }
-  text($("key-path"), r.key);
-  text($("key-note"), r.key
-    ? (r.suggested ? "Found next to these results. Choose another one if this is not the right key." : "")
-    : "Not chosen yet. It is called key.vault and lies in the private folder Privatier made next to your original.");
-  $("dot-results").classList.toggle("ok", r.paths.length > 0);
-  $("dot-key").classList.toggle("ok", Boolean(r.key));
-  $("dot-password").classList.toggle("ok", Boolean(password));
-  const missing = [];
-  if (!r.paths.length) missing.push("the results");
-  if (!r.key) missing.push("the key file");
-  if (!password) missing.push("the password");
-  $("restore-go").disabled = missing.length > 0;
-  text($("restore-hint"), missing.length
-    ? `Still needed: ${missing.join(", ")}.`
-    : "Your results are not changed: a restored copy is written.");
+  $("restore-go").disabled = !(r.paths.length && $("restore-password").value);
 }
-function setKey(path, suggested) {
-  state.restore.key = path;
-  state.restore.suggested = suggested;
+function openRestore() {
+  state.restore = { paths: [], info: null, output: "" };
+  $("restore-password").value = "";
   hide("restore-error");
   renderRestore();
+  stage("restore", state.scan.has_key ? "form" : "nokey");
+  openSheet("restore");
 }
+$("restore-button").addEventListener("click", openRestore);
 async function setRestorePaths(paths) {
   hide("restore-error");
   const info = await call("restore_info", paths);
-  if (!info || info.error) {
-    showMessage("restore-error", info ? info.error : FAILED);
-    return;
-  }
+  if (failed(info)) { showMessage("restore-error", info ? info.error : FAILED, "These results could not be read."); return; }
   state.restore.paths = paths;
   state.restore.info = info;
-  if (info.suggested_key && (!state.restore.key || state.restore.suggested)) setKey(info.suggested_key, true);
   renderRestore();
-  if (state.restore.key) $("restore-password").focus();
+  $("restore-password").focus();
 }
-async function chooseForRestore(kind) {
+async function chooseResults(kind) {
   const paths = await call("choose", kind);
   if (paths && paths.error) { showMessage("restore-error", paths.error); return; }
-  if (!paths || !paths.length) return;
-  if (kind === "key") setKey(paths[0], false); else setRestorePaths(paths);
+  if (paths && paths.length) setRestorePaths(paths);
 }
-function clearResults() { state.restore.paths = []; state.restore.info = null; hide("restore-error"); renderRestore(); }
-$("restore-folder").addEventListener("click", () => chooseForRestore("folder"));
-$("restore-files").addEventListener("click", () => chooseForRestore("files"));
-$("choose-key").addEventListener("click", () => chooseForRestore("key"));
-$("restore-change").addEventListener("click", clearResults);
+$("restore-folder").addEventListener("click", () => chooseResults("folder"));
+$("restore-files").addEventListener("click", () => chooseResults("files"));
+$("restore-change").addEventListener("click", () => { state.restore.paths = []; state.restore.info = null; hide("restore-error"); renderRestore(); focusSheet(); });
 $("restore-password").addEventListener("input", renderRestore);
-
-async function runRestore() {
+$("restore-go").addEventListener("click", async () => {
   const r = state.restore;
   const password = $("restore-password").value;
-  if (!r.paths.length || !r.key || !password) return;
+  if (!r.paths.length || !password) return;
   hide("restore-error");
-  const result = await withBusy("Putting the real values back", "restore", r.paths, r.key, password);
+  stage("restore", "working");
+  state.locked = true;
+  const result = await withStatus("Putting the real values back", "restore", r.paths, password);
+  state.locked = false;
   $("restore-password").value = "";
   renderRestore();
   if (result.error) {
-    go("restore");
-    showMessage("restore-error", result.error, "Nothing was restored");
+    stage("restore", "form");
+    showMessage("restore-error", result.error, "Nothing was restored.");
     $("restore-password").focus();
     return;
   }
-  buildRestored(result);
-  go("restored");
-}
-$("restore-go").addEventListener("click", runRestore);
-$("restore-password").addEventListener("keydown", e => { if (e.key === "Enter") runRestore(); });
-
-function buildRestored(r) {
-  state.restore.output = r.output;
-  text($("restored-files"), String(r.restored));
-  text($("restored-files-what"), r.restored === 1 ? "file restored" : "files restored");
-  text($("restored-values"), String(r.values));
-  text($("restored-values-what"), r.values === 1 ? "code replaced by its real value" : "codes replaced by their real values");
-  text($("restored-unknown"), String(r.unknown));
-  text($("restored-unknown-what"), r.unknown === 1 ? "code not in this key" : "codes not in this key");
-  const unknown = $("restored-unknown-note");
-  unknown.classList.toggle("hidden", !r.unknown);
-  text(unknown, r.unknown ? `${plural(r.unknown, "code")} ${r.unknown === 1 ? "is" : "are"} not in this key and stayed as ${r.unknown === 1 ? "it is" : "they are"}.` : "");
-  const skipped = $("restored-skipped");
-  skipped.classList.toggle("hidden", !r.skipped.length);
-  text(skipped, r.skipped.length ? `Left out: ${fileList(r.skipped)}` : "");
-  const errors = $("restored-errors");
-  errors.classList.toggle("hidden", !r.errors.length);
-  text(errors, r.errors.length ? `Not restored: ${fileList(r.errors)}` : "");
-  text($("restored-output"), r.output);
-}
+  r.output = result.output;
+  const counts = $("restored-counts");
+  counts.replaceChildren();
+  const line = (n, one, many) => counts.append(make("dt", "", String(n)), make("dd", "", n === 1 ? one : many));
+  line(result.restored, "file restored", "files restored");
+  line(result.values, "code replaced by its real value", "codes replaced by their real values");
+  line(result.unknown, "code not in this key", "codes not in this key");
+  show("restored-unknown", result.unknown > 0);
+  text($("restored-unknown"), result.unknown ? `${plural(result.unknown, "code")} ${result.unknown === 1 ? "is" : "are"} not in this key and stayed as ${result.unknown === 1 ? "it is" : "they are"}.` : "");
+  show("restored-skipped", result.skipped.length > 0);
+  text($("restored-skipped"), result.skipped.length ? `Left out: ${fileList(result.skipped)}` : "");
+  show("restored-errors", result.errors.length > 0);
+  text($("restored-errors"), result.errors.length ? `Not restored: ${fileList(result.errors)}` : "");
+  text($("restored-output"), result.output);
+  stage("restore", "result");
+  $("restore-finder").focus();
+});
 $("restore-finder").addEventListener("click", () => call("show_in_finder", state.restore.output));
-$("restore-again").addEventListener("click", () => { clearResults(); go("restore"); });
-$("to-protect").addEventListener("click", () => { clearResults(); state.view.restore = "restore"; setTab("protect"); });
 
-// --------------------------------------------------------------- behaving like an app
+// --------------------------------------------------------------- dropping, keys, behaving like an app
+// The whole window takes a drop. The window tells the page what was dropped, with full paths.
+function restoreFormOpen() { return state.sheet === "restore" && !$("sheet-restore").querySelector('[data-stage="form"]').classList.contains("hidden"); }
+function dropWords() {
+  if (restoreFormOpen()) return "Drop the results here";
+  if (state.busy || state.sheet) return "";
+  return "Drop a folder to add it as a project";
+}
+let dragTimer = 0;
+function dragOver(on) { clearTimeout(dragTimer); $("dropover").classList.toggle("on", on); }
+window.itemsDropped = paths => {
+  dragOver(false);
+  if (!dropWords() || !Array.isArray(paths) || !paths.length) return;
+  if (restoreFormOpen()) setRestorePaths(paths); else addProject(paths);
+};
+for (const type of ["dragenter", "dragover"]) {
+  document.addEventListener(type, e => {
+    e.preventDefault();
+    const words = dropWords();
+    if (!words) return;
+    text($("dropover-text"), words);
+    dragOver(true);
+    dragTimer = setTimeout(() => dragOver(false), 400);  // dragging goes on sending these: silence means it left
+  });
+}
+document.addEventListener("drop", e => { e.preventDefault(); dragOver(false); });
+
 // The web page menu (Reload, Back) has no place here. Text fields and values keep theirs, for copying.
-document.addEventListener("contextmenu", e => {
-  if (!e.target.closest("input, .sel, td, code, li, .message")) e.preventDefault();
-});
-// Command-O chooses a folder, on the two screens that start with one.
+document.addEventListener("contextmenu", e => { if (!e.target.closest("input, .sel, td, code, li, .note, .label, .q-say")) e.preventDefault(); });
 document.addEventListener("keydown", e => {
-  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "o") return;
-  e.preventDefault();
-  if (state.busy || state.sheet) return;
-  if (state.tab === "protect" && state.view.protect === "start") chooseAndScan("folder");
-  if (state.tab === "restore" && state.view.restore === "restore") chooseForRestore("folder");
+  if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+  const key = e.key.toLowerCase();
+  if (key === "o") { e.preventDefault(); addProject(); }
+  if (key === "f") { e.preventDefault(); if (state.scan && !state.busy && !state.sheet) { $("filter").focus(); $("filter").select(); } }
 });
+
+// The switch for the local AI decides how the files are read, so the open project is read again.
+$("ai").addEventListener("change", () => { if (state.current && state.scan && !state.busy && !state.sheet) selectProject(state.current, true); });
 
 // --------------------------------------------------------------- starting
-buildSeg($("tabs"), [{ value: "protect", label: "Protect" }, { value: "restore", label: "Restore" }], "tab", setTab);
-render();
-renderRestore();
+showEmpty();
 window.addEventListener("pywebviewready", async () => {
   const info = await call("startup");
   const ready = Boolean(info && info.ai_ready);
   $("ai").checked = ready;
   $("ai").disabled = !ready;
-  $("ai-recommended").classList.toggle("hidden", !ready);
-  if (!ready) text($("ai-note"), "Not set up on this computer yet. Without it, names with no hint around them can be missed. To set it up, run: privatier setup-ai");
+  if (!ready) { text($("ai-note"), "Not set up on this computer yet. Without it, names with no hint around them can be missed. To set it up, run: privatier setup-ai"); show("ai-note", true); }
   if (info && info.version) text($("version"), `Version ${info.version}`);
+  if (info && info.error) showMessage("status-error", info.error);
+  setProjects(info && !info.error ? info : { projects: [] });
+  showEmpty();
 });
 </script>
 </body>

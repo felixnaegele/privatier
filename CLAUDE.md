@@ -18,6 +18,9 @@ software engineer: explain in plain words, recommend rather than list options, a
 - **The word "anonymous"** is used only at level 4, and only if the check on the files as written supports it. "Could
   not check" never counts as safe. No output folder may be called anonymous by default.
 - **File and folder names are never changed**, so users can keep track of their files.
+- **One folder per project (the app):** the app is sandboxed and may only open folders the owner adds. Everything it
+  writes goes into `Privatier/` inside the project, and the key stays there with the data. Never add a way for the app to
+  look outside a project folder.
 - **Do not test for the sake of testing.** Tell the owner when the necessary tests are done, and move on.
 
 ## Practical notes
@@ -29,8 +32,8 @@ software engineer: explain in plain words, recommend rather than list options, a
   owner open the real window.
 - Use `.venv/bin/python -m pytest` and `.venv/bin/python -m pip`.
 - The app and the dmg are built with `sh packaging/build_app.sh`. A sandboxed session can build the app and run its
-  self-test (`dist/Privatier.app/Contents/MacOS/Privatier --self-test`), but not the dmg: the owner runs
-  `sh packaging/build_app.sh --dmg-only` in Terminal.
+  self-test only without the sandbox (`--no-sandbox`). The sandboxed app cannot start inside a sandboxed session, and
+  the dmg cannot be made there: run `sh packaging/build_app.sh` in the owner's Terminal.
 - `tools/ui_demo.py <folder>` writes the screen with made-up data, to look at it in a browser.
 - Findings and their ids hold real values: they go to the screen only, never into a file, log or report.
 
@@ -43,8 +46,9 @@ software engineer: explain in plain words, recommend rather than list options, a
 ## Where the code is
 `identity.py` who is who, and the questions. `transform.py` table rows and free text. `tables.py` headers. `detect/`
 rules and AI. `birthdates.py` is a birth date column plausible. `handlers/` one file per file type, `excel_formulas.py`
-stored results. `privacy.py` the levels. `review.py` what was found and what the user decided. `uniqueness.py` the check and the label. `app/` the desktop app. `packaging/` the app bundle and the dmg.
+stored results. `privacy.py` the levels. `review.py` what was found and what the user decided. `outline.py` each file as its columns, for the screen. `project.py` the Privatier folder inside a project. `uniqueness.py` the check and the label. `app/` the desktop app. `packaging/` the app bundle and the dmg.
 
 ## Next steps
-1. Clean-install test of the dmg on a second Mac (Apple chip, macOS 14 or newer).
-2. Ideas the owner has seen but not yet chosen: see the roadmap in `README.md`.
+1. The owner tries the sandboxed app in the real window: add a folder by dialog and by drag and drop, make a copy, restore.
+2. Clean-install test of the dmg on a second Mac (Apple chip, macOS 14 or newer).
+3. Ideas the owner has seen but not yet chosen: see the roadmap in `README.md`.
