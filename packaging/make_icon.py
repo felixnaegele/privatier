@@ -22,85 +22,39 @@ def _lerp(a, b, t):
 
 
 def draw_icon(size: int = 1024) -> Image.Image:
-    """A document whose sensitive lines are masked, with a shield in front. Apple's grid: the shape fills 80%."""
+    """A sheet of paper with one line blacked out. Apple's grid: the shape fills 824 of 1024, with a soft shadow."""
     W = size * S
     canvas = Image.new("RGBA", (W, W), (0, 0, 0, 0))
     u = W / 1024  # unit: designed on a 1024 grid
 
-    # Rounded square (Apple template: 824 of 1024, soft shadow beneath)
     box = (100 * u, 100 * u, 924 * u, 924 * u)
     radius = 186 * u
     shadow = Image.new("RGBA", (W, W), (0, 0, 0, 0))
-    ImageDraw.Draw(shadow).rounded_rectangle((box[0], box[1] + 12 * u, box[2], box[3] + 12 * u), radius, fill=(0, 0, 0, 110))
-    canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(14 * u)))
+    ImageDraw.Draw(shadow).rounded_rectangle((box[0], box[1] + 10 * u, box[2], box[3] + 10 * u), radius, fill=(0, 0, 0, 70))
+    canvas.alpha_composite(shadow.filter(ImageFilter.GaussianBlur(12 * u)))
 
-    gradient = Image.new("RGBA", (W, W))
-    top, bottom = (46, 104, 168), (16, 40, 92)
+    # Warm paper, very slightly lighter at the top, with a fine edge so it shows on white
     column = Image.new("RGB", (1, W))
     for y in range(W):
-        column.putpixel((0, y), _lerp(top, bottom, min(1, max(0, (y - box[1]) / (box[3] - box[1])))))
-    gradient = column.resize((W, W)).convert("RGBA")
+        column.putpixel((0, y), _lerp((248, 245, 238), (237, 233, 223), min(1, max(0, (y - box[1]) / (box[3] - box[1])))))
+    paper = column.resize((W, W)).convert("RGBA")
     mask = Image.new("L", (W, W), 0)
     ImageDraw.Draw(mask).rounded_rectangle(box, radius, fill=255)
-    canvas.paste(gradient, (0, 0), mask)
+    canvas.paste(paper, (0, 0), mask)
+    d = ImageDraw.Draw(canvas)
+    d.rounded_rectangle(box, radius, outline=(214, 208, 195, 255), width=max(1, int(3 * u)))
 
-    layer = Image.new("RGBA", (W, W), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
+    # Lines of text, one of them blacked out. Small sizes get thicker lines so they stay visible.
+    bold = 1.35 if size <= 64 else 1.0
+    x0, full = 100 * u + 0.22 * 824 * u, 0.56 * 824 * u
+    grey, ink = (163, 158, 146, 255), (22, 24, 29, 255)
+    for top, frac in ((0.27, 1.0), (0.38, 0.75), (0.65, 0.86), (0.76, 0.54)):
+        h = 0.045 * 824 * u * bold
+        y = 100 * u + top * 824 * u
+        d.rounded_rectangle((x0, y, x0 + full * frac, y + h), h / 2, fill=grey)
+    y = 100 * u + 0.48 * 824 * u
+    d.rounded_rectangle((x0, y, x0 + full, y + 0.10 * 824 * u * (1.1 if bold > 1 else 1.0)), 12 * u, fill=ink)
 
-    # Document with a folded corner
-    left, top_, right, bottom_ = 262 * u, 214 * u, 706 * u, 770 * u
-    fold = 112 * u
-    page = [(left, top_), (right - fold, top_), (right, top_ + fold), (right, bottom_), (left, bottom_)]
-    docshadow = Image.new("RGBA", (W, W), (0, 0, 0, 0))
-    ImageDraw.Draw(docshadow).polygon([(x, y + 14 * u) for x, y in page], fill=(0, 0, 0, 90))
-    layer.alpha_composite(docshadow.filter(ImageFilter.GaussianBlur(12 * u)))
-    d.polygon(page, fill=(250, 251, 253, 255))
-    d.polygon([(right - fold, top_), (right, top_ + fold), (right - fold, top_ + fold)], fill=(206, 216, 232, 255))
-
-    # Text lines: some readable (grey), some masked (dark bars)
-    x0 = left + 52 * u
-    rows = [(330, 0.50, "text"), (400, 0.82, "mask"), (470, 0.72, "text"), (540, 0.90, "mask"), (610, 0.62, "text"), (680, 0.40, "text")]
-    full = (right - 52 * u) - x0
-    for y, frac, kind in rows:
-        y = y * u
-        h = 34 * u
-        if kind == "text":
-            d.rounded_rectangle((x0, y, x0 + full * frac, y + h), h / 2, fill=(176, 190, 212, 255))
-        else:
-            d.rounded_rectangle((x0 - 6 * u, y - 6 * u, x0 + full * frac, y + h + 6 * u), 10 * u, fill=(18, 36, 74, 255))
-
-    # Shield with a check mark, lower right
-    cx, cy = 690 * u, 700 * u
-    sw, sh = 330 * u, 390 * u
-    pts = []
-    import math
-
-    def shield(scale):
-        w, h = sw * scale, sh * scale
-        top_y = cy - h / 2
-        poly = [(cx - w / 2, top_y + h * 0.10), (cx, top_y), (cx + w / 2, top_y + h * 0.10), (cx + w / 2, top_y + h * 0.52)]
-        for i in range(1, 25):  # right curve down to the tip
-            t = i / 24
-            poly.append((cx + w / 2 * (1 - t) ** 0.9 * math.cos(t * 0.0) , top_y + h * (0.52 + 0.48 * math.sin(t * math.pi / 2))))
-        poly.append((cx, top_y + h))
-        for i in range(24, 0, -1):
-            t = i / 24
-            poly.append((cx - w / 2 * (1 - t) ** 0.9, top_y + h * (0.52 + 0.48 * math.sin(t * math.pi / 2))))
-        poly.append((cx - w / 2, top_y + h * 0.52))
-        return poly
-
-    ring = shield(1.0)
-    d.polygon([(x, y + 10 * u) for x, y in ring], fill=(0, 0, 0, 70))
-    d.polygon(ring, fill=(250, 251, 253, 255))
-    inner = shield(0.84)
-    d.polygon(inner, fill=(30, 168, 142, 255))
-    tick = [(cx - 62 * u, cy + 6 * u), (cx - 18 * u, cy + 52 * u), (cx + 66 * u, cy - 50 * u)]
-    d.line(tick, fill=(255, 255, 255, 255), width=int(34 * u), joint="curve")
-    for x, y in (tick[0], tick[2]):
-        r = 17 * u
-        d.ellipse((x - r, y - r, x + r, y + r), fill=(255, 255, 255, 255))
-
-    canvas.alpha_composite(layer)
     return canvas.resize((size, size), Image.LANCZOS)
 
 
@@ -137,23 +91,17 @@ def _font(size: int):
 
 
 def draw_background(scale: int = 1) -> Image.Image:
-    """660 x 400 points: light background, an arrow from the app to the Applications folder, one line of help."""
+    """660 x 400 points: a plain light background, a thin chevron between the two icons, one small line of help."""
     w, h = 660 * scale, 400 * scale
-    img = Image.new("RGB", (w, h))
-    for y in range(h):
-        img.paste(_lerp((247, 249, 252), (226, 233, 244), y / h), (0, y, w, y + 1))
+    img = Image.new("RGB", (w, h), (246, 246, 244))
     d = ImageDraw.Draw(img)
-    cy = 190 * scale
-    d.line((255 * scale, cy, 395 * scale, cy), fill=(120, 140, 175), width=6 * scale)
-    d.polygon([(412 * scale, cy), (388 * scale, cy - 20 * scale), (388 * scale, cy + 20 * scale)], fill=(120, 140, 175))
-    text = "Drag Privatier onto Applications"
-    font = _font(17 * scale)
-    tw = d.textlength(text, font=font)
-    d.text(((w - tw) / 2, 52 * scale), text, fill=(52, 70, 104), font=font)
-    small = _font(13 * scale)
-    note = "First time: please read \"First start.txt\""
+    cx, cy = 330 * scale, 185 * scale  # between the app and Applications, level with the icons
+    a = 11 * scale
+    d.line([(cx - a / 2, cy - a), (cx + a / 2, cy), (cx - a / 2, cy + a)], fill=(180, 179, 173), width=2 * scale, joint="curve")
+    small = _font(12 * scale)
+    note = "Drag Privatier into Applications. The first time, read First start."
     tw = d.textlength(note, font=small)
-    d.text(((w - tw) / 2, 368 * scale), note, fill=(110, 124, 150), font=small)
+    d.text(((w - tw) / 2, 362 * scale), note, fill=(134, 134, 139), font=small)
     return img
 
 
