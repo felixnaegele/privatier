@@ -43,15 +43,22 @@ already has a folder named `Privatier` with your own files in it, the app does n
   tell people apart.
 - **Right, the file as its columns.** A table shows one row per column: what kind it is (name, ID, date of birth,
   free text, not identifying) and what it becomes. The arrow opens the values of the column. Every value and every
-  column has a tickbox: untick it to keep it as written. The kind of a column can be corrected in place. A letter has
-  no columns and shows one row per kind (names, dates, places). "Add a missed word" adds a word or name; it gets a
-  code like `TERM_0001`. A kept value is your decision: at level 4 it blocks the word "anonymous".
-- **Protection and open points.** When a project has been read, the protection level comes up by itself, with the
-  effect of each level shown before anything is written, followed by the open points (unclear cases). Both stay
-  reachable as buttons at the top right. An open point is also shown as an orange exclamation mark on the column and
-  the value it concerns. Open points can be skipped: what is unclear stays apart.
-- **Make copy…** asks for the key password and writes the copy. **Restore…** takes the results the AI gave you and
-  the password, and writes them with the real values into `Privatier/Restored`.
+  column has a tickbox: untick it to keep it as written. A column Privatier leaves alone (shown grey) can be ticked
+  too: every value in it then becomes a code. The kind of a column can be corrected in place. A letter has no columns
+  and shows one row per kind (names, dates, places). A kept value is your decision: at level 4 it blocks the word
+  "anonymous". The edges between the panes and between the column headings can be dragged to change their width; a
+  double click puts them back.
+- **Spot check.** Type a value that could identify someone and press "Find everywhere". If it is in no file, that is
+  the good outcome and nothing changes. If it is still in a file, it is replaced everywhere (by a code like
+  `TERM_0001`), and the files are read again, with the local AI if it was off, because the first reading missed it.
+- **Protection and issues.** When a project has been read, the protection level comes up by itself, with the
+  effect of each level shown before anything is written, followed by the issues (unclear cases). At the top, "No
+  issues" or the number of issues shows the state and opens the list; the level button changes the level. An issue
+  is also shown as an orange exclamation mark on the column and the value it concerns. Issues can be skipped: what is
+  unclear stays apart.
+- **Make a copy | Restore.** The switch at the top chooses what the window is for. In "Make a copy", **Make copy…**
+  asks for the key password and writes the copy. In "Restore", drop or choose the results the AI gave you, enter the
+  password, and they are written with the real values into `Privatier/Restored`.
 
 A project protected with the command line or an earlier version has its key next to the project
 (`Studie_privatier/key.vault`). To keep the same codes in the app, make one copy in the app first (this creates the

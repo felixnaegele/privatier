@@ -160,3 +160,45 @@ def test_each_file_is_shown_as_its_columns_and_a_column_can_be_changed(tmp_path)
 
     scan = app.set_column(columns[1]["ref"], None)  # and takes it back
     assert scan["outline"]["patienten.csv"]["tables"][0]["columns"][1]["kind"] == "PERSON"
+
+
+def test_a_column_nothing_is_done_to_can_be_ticked_to_replace(tmp_path):
+    study = tmp_path / "Studie"
+    study.mkdir()
+    (study / "echo.csv").write_text(
+        "Patienten-ID;OP-Datum;GLS\nP-001;03.04.2020;-18,5\nP-002;12.05.2021;-21,0\nP-003;01.02.2022;-16,2\n",
+        encoding="utf-8",
+    )
+    app = AppSession(ProjectStore(tmp_path / "settings" / "projects.json"))
+    scan = app.open_project(app.add_project([str(study)])["added"], False)
+    gls, surgery = scan["outline"]["echo.csv"]["tables"][0]["columns"][2], scan["outline"]["echo.csv"]["tables"][0]["columns"][1]
+    assert gls["kind"] == "KEEP" and not gls["tick"] and gls["total_values"] == 3
+
+    app.set_column(surgery["ref"], "ID", True)
+    scan = app.set_column(gls["ref"], "ID", True)  # the user ticks Replace on both
+    columns = scan["outline"]["echo.csv"]["tables"][0]["columns"]
+    assert [(c["tick"], c["kind_label"], len(c["values"])) for c in columns[1:]] == [(True, "Replaced by you", 3)] * 2
+    written = (Path(app.export(1, "a long password", {}, [], [])["output"]) / "echo.csv").read_text(encoding="utf-8")
+    assert "-18,5" not in written and "03.04.2020" not in written
+
+    scan = app.set_column(gls["ref"], None)  # unticked: the column is as before
+    assert scan["outline"]["echo.csv"]["tables"][0]["columns"][2]["kind"] == "KEEP"
+
+
+def test_a_spot_check_finds_a_missed_value_or_says_it_is_nowhere(tmp_path):
+    study = tmp_path / "Studie"
+    study.mkdir()
+    (study / "notes.csv").write_text("Nr;Bemerkung\n1;Befund unauffällig, Kontrolle Zaunkönig\n2;keine\n", encoding="utf-8")
+    app = AppSession(ProjectStore(tmp_path / "settings" / "projects.json"))
+    app.open_project(app.add_project([str(study)])["added"], False)
+
+    nowhere = app.spot_check([], [], "Quetzalcoatl")
+    assert nowhere["spot"] == {"term": "Quetzalcoatl", "found": False, "already": False}
+    assert not any(f["source"] == "added" for f in nowhere["findings"])
+    assert app.choice.extra == []  # a value in no file does not go on the list
+
+    found = app.spot_check([], [], "Zaunkönig")
+    assert found["spot"]["found"] and found["spot"]["places"] == 1
+    assert app.choice.extra == ["Zaunkönig"]
+    written = (Path(app.export(1, "a long password", {}, [], [], [], ["Zaunkönig"])["output"]) / "notes.csv").read_text(encoding="utf-8")
+    assert "Zaunkönig" not in written and "Befund unauffällig" in written

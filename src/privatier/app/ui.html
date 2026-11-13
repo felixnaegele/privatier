@@ -50,8 +50,8 @@
   .icon { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
   /* ------------------------------------------------------------ the window */
-  .window { height: 100%; display: grid; grid-template-columns: 200px minmax(0, 1fr); }
-  .sidebar { background: var(--side); border-right: .5px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .window { height: 100%; display: grid; grid-template-columns: var(--side-w, 200px) minmax(0, 1fr); }
+  .sidebar { position: relative; background: var(--side); border-right: .5px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
   .main { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
   .toolbar { height: 52px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 16px; border-bottom: .5px solid var(--line); }
   .toolbar .titles { flex: 1; min-width: 0; }
@@ -60,8 +60,8 @@
   .progress::before { content: ""; position: absolute; top: 0; bottom: 0; width: 30%; background: var(--accent); animation: slide 1.3s ease-in-out infinite; }
   @keyframes slide { from { left: -30%; } to { left: 100%; } }
   @keyframes pulse { 50% { opacity: .3; } }
-  .panes { flex: 1; min-height: 0; display: grid; grid-template-columns: 250px minmax(0, 1fr); }
-  .files { border-right: .5px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  .panes { flex: 1; min-height: 0; display: grid; grid-template-columns: var(--files-w, 250px) minmax(0, 1fr); }
+  .files { position: relative; border-right: .5px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
   .detail { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
   .blank { flex: 1; display: grid; place-content: center; justify-items: center; text-align: center; padding: 32px; gap: 8px; }
   .blank h1 { font-size: 15px; font-weight: 600; }
@@ -86,9 +86,32 @@
   .btn:disabled { opacity: .4; pointer-events: none; }
   .toolbar .btn { min-height: 28px; }
   .toolbar .btn .icon { color: var(--muted); }
-  .toolbar .btn.open { color: var(--warn); }
-  .toolbar .btn.open .icon { color: var(--warn); }
-  .toolbar .sep { width: .5px; height: 18px; background: var(--line); margin: 0 4px; flex: none; }
+  .toolbar .btn .chev { width: 11px; height: 11px; margin-left: -2px; }
+  .toolbar .sep { width: .5px; height: 20px; background: var(--line); margin: 0 6px; flex: none; }
+  /* a status, not a button: plain text with its sign; it only highlights when pointed at, as it opens the details */
+  .status { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; border-radius: 6px; padding: 3px 8px; min-height: 28px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; cursor: default; }
+  .status:hover { background: var(--hover); }
+  .status .icon { color: var(--good); }
+  .status.open { color: var(--warn); font-weight: 500; }
+  .status.open .icon { color: var(--warn); }
+  /* the mode switch, like the ones in macOS toolbars */
+  .seg { display: inline-flex; flex: none; padding: 2px; border-radius: 7px; background: var(--quiet); }
+  .seg button { font: inherit; color: var(--text); background: none; border: 0; border-radius: 5px; padding: 2px 12px; min-height: 24px; white-space: nowrap; cursor: default; transition: background-color .15s; }
+  .seg button[aria-checked="true"] { background: var(--button); box-shadow: var(--edge); font-weight: 500; }
+  .seg button:disabled { opacity: .4; }
+  /* dragging the edge of a pane or of a column heading changes its width */
+  .grip { position: absolute; top: 0; bottom: 0; right: -3px; width: 6px; z-index: 5; cursor: col-resize; }
+  .grip:hover, .grip.on { background: linear-gradient(to right, transparent 2.5px, var(--accent) 2.5px, var(--accent) 3.5px, transparent 3.5px); }
+  .col-grip { position: absolute; top: 0; bottom: 0; left: -3px; width: 7px; cursor: col-resize; z-index: 2; }
+  .restore-view { flex: 1; min-height: 0; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; padding: 40px 24px; }
+  .restore-card { width: 480px; max-width: 100%; display: flex; flex-direction: column; background: var(--sheet); border-radius: 10px; box-shadow: 0 0 0 .5px var(--line), 0 4px 16px rgba(0, 0, 0, .08); }
+  .restore-card [data-stage] { display: flex; flex-direction: column; }
+  .restore-card .sheet-body { padding: 20px 20px 4px; }
+  .restore-card .sheet-body > h2 { font-size: 14px; margin-bottom: 4px; }
+  .restore-card .sheet-body p { margin-top: 8px; }
+  .restore-card .sheet-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 16px 20px; }
+  .restore-card .sheet-foot .btn { min-width: 76px; min-height: 28px; }
+  .restore-card h3 { font-size: 11px; font-weight: 600; color: var(--muted); margin: 20px 0 4px; }
   .link { font: inherit; color: var(--accent); background: none; border: 0; border-radius: 4px; padding: 0 2px; cursor: default; }
   .link:hover { text-decoration: underline; }
   input[type=password], input[type=text], input[type=search] {
@@ -154,7 +177,8 @@
   .frow .num { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11.5px; }
   .frow .state { font-size: 11.5px; white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; font-variant-numeric: tabular-nums; }
   .frow .state .icon { width: 13px; height: 13px; color: inherit; }
-  .frow .state.done, .frow .state.done .icon { color: var(--faint); }
+  .frow .state.done, .frow .state.done .icon, .orow .state.done, .orow .state.done .icon { color: var(--faint); }
+  .orow .state { display: inline-flex; align-items: center; flex: none; }
   .frow.dim .mid, .frow.dim .icon { color: var(--faint); }
   .frow.on { background: var(--accent); color: var(--on-accent); }
   .frow.on .icon, .frow.on .num, .frow.on .state, .frow.on .mid { color: var(--on-accent); }
@@ -165,16 +189,17 @@
   /* ------------------------------------------------------------ what was found */
   .detail-head { height: 40px; flex: none; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 16px; }
   .detail-head .line { flex: 1; }
-  .table-wrap { flex: 1; min-height: 0; overflow-y: auto; border-top: .5px solid var(--line); }
+  .table-wrap { flex: 1; min-height: 0; overflow: auto; border-top: .5px solid var(--line); }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   th { position: sticky; top: 0; z-index: 1; background: var(--bg); text-align: left; font-size: 11px; font-weight: 500; color: var(--muted); height: 24px; padding: 0 8px; box-shadow: inset 0 -.5px 0 var(--line); }
   td { height: 28px; padding: 0 8px; border-bottom: .5px solid var(--line-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   th:first-child, td:first-child { padding-left: 16px; }
   th:last-child, td:last-child { padding-right: 16px; }
-  .outline-head, .orow { display: grid; grid-template-columns: minmax(0, 1fr) 124px 176px 50px 56px; align-items: center; padding: 0 10px 0 8px; }
+  .outline-head, .orow { display: grid; grid-template-columns: minmax(120px, 1fr) var(--kind-w, 124px) var(--becomes-w, 176px) 50px 56px; align-items: center; padding: 0 10px 0 8px; }
   .outline-head { position: sticky; top: 0; z-index: 1; background: var(--bg); height: 24px; font-size: 11px; font-weight: 500; color: var(--muted); box-shadow: inset 0 -.5px 0 var(--line); }
   .orow { min-height: 28px; border-bottom: .5px solid var(--line-soft); }
   .outline-head > div, .orow > div { padding: 0 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .outline-head > .c-sized { position: relative; box-shadow: inset .5px 0 0 var(--line-soft); }
   .orow .c-name { display: flex; align-items: center; gap: 4px; padding-left: calc(6px + var(--depth, 0) * 18px); }
   .orow .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; -webkit-user-select: text; user-select: text; }
   .orow .c-name > .icon { color: var(--muted); }
@@ -294,9 +319,9 @@
   .dropover .icon { width: 28px; height: 28px; }
 
   @media (max-width: 960px) {
-    .window { grid-template-columns: 172px minmax(0, 1fr); }
-    .panes { grid-template-columns: 216px minmax(0, 1fr); }
-    .outline-head, .orow { grid-template-columns: minmax(0, 1fr) 112px 124px 46px 50px; }
+    .window { grid-template-columns: var(--side-w, 172px) minmax(0, 1fr); }
+    .panes { grid-template-columns: var(--files-w, 216px) minmax(0, 1fr); }
+    .outline-head, .orow { grid-template-columns: minmax(120px, 1fr) var(--kind-w, 112px) var(--becomes-w, 124px) 46px 50px; }
     .outline-head > div, .orow > div { padding: 0 4px; }
     .wide-only { display: none; }
     select.kind { font-size: 11.5px; padding: 0 17px 0 5px; background-position: right 3px center; }
@@ -336,12 +361,12 @@
 <div class="window" id="window">
   <aside class="sidebar" aria-label="Projects">
     <div class="side-label" id="projects-label">Projects</div>
+    <div class="grip" data-grip="side" title="Drag to change the width"></div>
     <div class="side-list" id="project-list" role="listbox" aria-labelledby="projects-label"></div>
     <button class="side-add" id="add-folder" type="button" title="Command-O"><svg class="icon"><use href="#i-plus"/></svg>Add folder…</button>
-    <div class="side-hint" id="side-hint">Privatier can only work inside the folders you add here.</div>
     <div class="note bad side-error hidden" id="status-error" role="alert"></div>
     <div class="side-foot">
-      <label class="row" id="ai-row"><span id="ai-title">Find names with the local AI</span>
+      <label class="row" id="ai-row"><span id="ai-title">Local AI</span>
         <span class="switch"><input type="checkbox" role="switch" id="ai" aria-labelledby="ai-title" aria-describedby="ai-note"><span class="track"></span></span></label>
       <div id="ai-note" class="hidden" style="margin-top:4px"></div>
       <div class="quiet"><svg class="icon"><use href="#i-lock"/></svg><span>Nothing leaves this computer.</span></div>
@@ -355,10 +380,13 @@
         <div class="title cut sel" id="title">Privatier</div>
         <div class="small muted cut" id="subtitle"></div>
       </div>
-      <button class="btn bare hidden" id="protection-button" type="button" title="Protection: how much detail the copy keeps"><svg class="icon"><use href="#i-shield"/></svg><span><span id="protection-level"></span><span class="wide-only" id="protection-name"></span></span></button>
-      <button class="btn bare hidden" id="points-button" type="button"><svg class="icon"><use id="points-icon" href="#i-mark"/></svg><span id="points-count"></span></button>
+      <button class="status hidden" id="points-button" type="button"><svg class="icon"><use id="points-icon" href="#i-done"/></svg><span id="points-count"></span></button>
+      <button class="btn popup hidden" id="protection-button" type="button" title="Protection: how much detail the copy keeps. Click to change it."><svg class="icon"><use href="#i-shield"/></svg><span><span id="protection-level"></span><span class="wide-only" id="protection-name"></span></span><svg class="icon chev"><use href="#i-updown"/></svg></button>
       <span class="sep hidden" id="toolbar-sep"></span>
-      <button class="btn bare" id="restore-button" type="button" disabled>Restore…</button>
+      <div class="seg" id="mode" role="radiogroup" aria-label="What to do">
+        <button type="button" role="radio" id="mode-copy" aria-checked="true" disabled>Make a copy</button>
+        <button type="button" role="radio" id="mode-restore" aria-checked="false" disabled>Restore</button>
+      </div>
       <button class="btn primary" id="copy-button" type="button" disabled>Make copy…</button>
     </header>
     <div class="progress hidden" id="progress" role="progressbar" aria-label="Working"></div>
@@ -373,6 +401,7 @@
 
     <div class="panes hidden" id="panes">
       <section class="files" aria-label="Files">
+        <div class="grip" data-grip="files" title="Drag to change the width"></div>
         <div class="file-list" id="file-list" role="listbox" aria-label="Files of this project"></div>
         <div class="note bad hidden" id="files-error" role="alert" style="margin:0;padding:8px 16px"></div>
       </section>
@@ -383,20 +412,22 @@
         </div>
         <div class="table-wrap" id="table-wrap">
           <div id="outline" role="treegrid" aria-label="What will be replaced">
-            <div class="outline-head" role="row"><div id="outline-first" role="columnheader">Column</div><div role="columnheader">Kind</div><div role="columnheader">Becomes</div><div class="c-found" role="columnheader">Found</div><div class="c-replace" role="columnheader">Replace</div></div>
+            <div class="outline-head" role="row"><div id="outline-first" role="columnheader">Column</div><div role="columnheader" class="c-sized"><span class="col-grip" data-grip="kind" title="Drag to change the width"></span>Kind</div><div role="columnheader" class="c-sized"><span class="col-grip" data-grip="becomes" title="Drag to change the width"></span>Becomes</div><div class="c-found" role="columnheader">Found</div><div class="c-replace" role="columnheader">Replace</div></div>
             <div id="outline-rows" role="rowgroup"></div>
           </div>
           <div class="pane-note hidden" id="found-note"></div>
         </div>
         <div class="add-row">
-          <span class="muted">Add a missed word</span>
-          <input type="text" id="add-term" placeholder="Word or name" aria-label="Word or name to add" autocomplete="off" autocapitalize="off" spellcheck="false">
-          <button class="btn" id="add-button" type="button">Add</button>
+          <span class="muted">Spot check:</span>
+          <input type="text" id="add-term" placeholder="Potential identifier" aria-label="Spot check: a value that could identify someone. Privatier looks for it in all files." title="Type a value that could identify someone, such as a name. If it is still in a file, it is replaced and the files are read again." autocomplete="off" autocapitalize="off" spellcheck="false">
+          <button class="btn" id="add-button" type="button">Find everywhere</button>
           <span id="tokens" style="display:contents"></span>
+          <span class="note hidden" id="spot-result" role="status" style="margin:0;flex-basis:100%"></span>
           <span class="note bad hidden" id="add-error" role="alert" style="margin:0;flex-basis:100%"></span>
         </div>
       </section>
     </div>
+    <div class="restore-view hidden" id="restore-view"></div>
 
   </div>
 </div>
@@ -436,7 +467,7 @@
     </div>
     <div data-stage="points">
       <div class="sheet-body">
-        <h2 id="points-title">Open points</h2>
+        <h2 id="points-title">Issues</h2>
         <div class="muted" id="points-intro">Answering is optional. Whatever stays unanswered is kept apart, never guessed.</div>
         <div id="points-list"></div>
         <h3 id="notes-title">Good to know</h3>
@@ -485,7 +516,7 @@
         <ol class="steps">
           <li><strong>Look through the copy before you upload it.</strong> <span class="muted">Automatic detection is never perfect.</span></li>
           <li>Upload files from the copy to your AI tool, <strong>never the key</strong>.</li>
-          <li id="next-restore">Later, use <strong>Restore…</strong> to put the real values back into the results.</li>
+          <li id="next-restore">Later, switch to <strong>Restore</strong> at the top to put the real values back into the results.</li>
         </ol>
         <div class="where"><div class="what">The copy, inside this project</div><code id="done-where"></code></div>
         <h3>Result of the check</h3>
@@ -514,7 +545,7 @@
         <p>This project has no key yet, so there is nothing to put back.</p>
         <p class="muted">A key is made when you make a copy at level 1 or 2. With it, Privatier can put the real values back into results the AI gave you.</p>
       </div>
-      <div class="sheet-foot"><button class="btn primary" type="button" data-close>Done</button></div>
+      <div class="sheet-foot"><button class="btn primary" type="button" data-close>Back to Make a copy</button></div>
     </div>
     <div data-stage="form">
       <div class="sheet-body">
@@ -532,7 +563,7 @@
         <div class="fields"><span class="pw"><input type="password" id="restore-password" placeholder="Password of this project's key" aria-label="Password of this project's key" autocomplete="off"></span></div>
         <div id="restore-error" class="note bad hidden" role="alert"></div>
       </div>
-      <div class="sheet-foot"><button class="btn" type="button" data-close>Cancel</button><button class="btn primary" id="restore-go" type="button" disabled>Restore</button></div>
+      <div class="sheet-foot"><button class="btn" type="button" data-close>Clear</button><button class="btn primary" id="restore-go" type="button" disabled>Restore</button></div>
     </div>
     <div data-stage="working">
       <div class="sheet-body"><h2>Putting the real values back</h2><div class="working"><span class="spinner"></span><div><div class="st-head"></div><div class="st-sub muted small"></div></div></div></div>
@@ -556,7 +587,7 @@
   </div>
 </div>
 
-<div class="popover hidden" id="popover" role="dialog" aria-label="Open point"></div>
+<div class="popover hidden" id="popover" role="dialog" aria-label="Issue"></div>
 
 <div class="menu hidden" id="menu" role="menu"><button type="button" role="menuitem" id="menu-remove">Remove from list…</button></div>
 
@@ -571,7 +602,7 @@ const api = () => window.pywebview.api;
 const FAILED = "Something went wrong. Your original files were not changed.";
 const LIMIT = 200;  // values of one column shown at first: the list stays fast with thousands of findings
 const NO_AI = "The local AI was not used, so names with no hint around them can be missed. Look through the copy before you upload it.";
-const ONLY_HERE = "Privatier can only work inside the folders you add here.";
+const ONLY_HERE = "Add the folder of a project to begin.";
 const UNREACHABLE = "This folder cannot be reached. Add it again.";
 const TITLES = {  // every error gets a short, friendly headline
   "files-error": "The files could not be updated.", "add-error": "That did not work.", "level-error": "The numbers could not be updated.",
@@ -583,6 +614,7 @@ const state = {
   busy: false,      // a project is being opened: no switching meanwhile
   working: 0,       // smaller jobs under way (files, added words)
   sheet: null, locked: false, opener: null,
+  mode: "copy",     // the switch at the top: "copy" (make a copy) or "restore"
   ui: new Map(),    // per project, while the page lives: level, answers, what to keep, added words, files left out
   byId: new Map(), nodes: new Map(), points: new Map(),  // looked up from the scan: values, outline rows, open points
   restore: { paths: [], info: null, output: "" }, output: "", removing: null,
@@ -673,14 +705,20 @@ function renderChrome() {
   text($("subtitle"), facts.join(" · "));
   $("subtitle").classList.toggle("hidden", !facts.length);
   const idle = Boolean(s) && !state.busy && !state.working;
-  $("copy-button").disabled = $("restore-button").disabled = !idle;
+  const restoring = state.mode === "restore";
+  $("copy-button").disabled = !idle;
+  $("mode-copy").disabled = $("mode-restore").disabled = !idle || state.locked;
+  $("mode-copy").setAttribute("aria-checked", String(!restoring));
+  $("mode-restore").setAttribute("aria-checked", String(restoring));
+  show("copy-button", !restoring);
   show("progress", state.busy || state.working > 0);
   show("opening", state.busy);
-  show("panes", Boolean(s) && !state.busy);
+  show("panes", Boolean(s) && !state.busy && !restoring);
+  show("restore-view", Boolean(s) && !state.busy && restoring);
   show("blank", !s && !state.busy);
-  show("side-hint", state.projects.length > 0);
-  if (s && !state.busy) renderToolbar();
+  if (s && !state.busy && !restoring) renderToolbar();
   else for (const id of ["protection-button", "points-button", "toolbar-sep"]) hide(id);
+  show("toolbar-sep", Boolean(s) && !state.busy && !restoring);
 }
 
 // --------------------------------------------------------------- projects
@@ -741,6 +779,7 @@ async function selectProject(id, again) {
   if (!p) return;
   state.current = id;
   state.scan = null;
+  state.mode = "copy";
   hide("status-error");
   renderProjects();
   if (!p.available) { renderBlank(p.name, UNREACHABLE, true); renderChrome(); return; }
@@ -775,6 +814,7 @@ async function selectProject(id, again) {
   $("filter").value = $("add-term").value = "";
   hide("files-error");
   hide("add-error");
+  hide("spot-result");
   applyScan(result, false);
   openSetup("protection");  // only here, when a project was opened: never on a later refresh
 }
@@ -900,7 +940,7 @@ function renderFiles() {
       const points = filePoints(f);
       if (points.total || f.selected !== false) {  // every file that goes into the copy says how it stands
         const mark = make("span", "state " + (points.open ? "warn-text" : "done"));
-        mark.title = points.open ? `${plural(points.open, "open point")} in this file` : points.total ? "All open points in this file are answered" : "Nothing unclear in this file";
+        mark.title = points.open ? `${plural(points.open, "issue")} in this file` : points.total ? "All issues in this file are settled" : "Nothing unclear in this file";
         mark.append(icon(points.open ? "mark" : "done"), document.createTextNode(points.open ? String(points.open) : ""));
         row.appendChild(mark);
       }
@@ -1039,8 +1079,8 @@ function markButton(st, key, label, onClick) {
   // One sign everywhere for an open point: orange while it waits, grey with a tick once answered.
   const b = button("", "mark" + (st === "done" ? " done" : ""));
   b.dataset.fk = "m|" + key;
-  b.title = st === "done" ? "Answered. Click to see or change it." : "Open point. Click to see it.";
-  b.setAttribute("aria-label", `${st === "done" ? "Answered open point" : "Open point"}: ${label}`);
+  b.title = st === "done" ? "Settled. Click to see or change it." : "Issue. Click to see it.";
+  b.setAttribute("aria-label", `${st === "done" ? "Settled issue" : "Issue"}: ${label}`);
   b.appendChild(icon(st === "done" ? "done" : "mark"));
   b.addEventListener("click", e => { e.stopPropagation(); onClick(); });
   return b;
@@ -1094,10 +1134,24 @@ function nodeRow(node, depth, open) {
   kindCell(row, node);
   const becomes = cellDiv(row, "c-becomes", node.becomes);
   becomes.title = node.becomes;
-  cellDiv(row, "c-found", node.values.length ? String(node.values.length) : "").title = node.values.length ? plural(node.values.length, "different value") : "";
+  const empty = node.type === "column" && !node.values.length && node.col.total_values === 0;
+  const found = cellDiv(row, "c-found" + (empty ? " muted" : ""), node.values.length ? String(node.values.length) : empty ? "empty" : "");
+  found.title = node.values.length ? plural(node.values.length, "different value") : empty ? "This column has no values in this file" : "";
   const act = cellDiv(row, "c-replace");
   const state3 = tickState(node.values);
-  if (!idle && node.values.length) {
+  const byTick = node.type === "column" && node.col.decided === "ID" && node.col.tick === true;
+  if (node.type === "column" && !empty && (idle || !node.values.length || byTick)) {
+    // Nothing in this column is replaced yet (or only because the user ticked it): the tick decides for the whole column.
+    const box = make("input");
+    box.type = "checkbox";
+    box.dataset.fk = "x|" + node.key;
+    box.checked = byTick;
+    box.setAttribute("aria-label", `Replace every value in ${shown}`);
+    box.title = byTick ? "Every value of this column becomes a code. Untick to keep the column as it is."
+                       : "Tick to replace every value of this column by a code";
+    box.addEventListener("change", () => { box.disabled = true; setColumn(node.col.ref, box.checked ? "ID" : null, true); });
+    act.appendChild(box);
+  } else if (!idle && node.values.length) {
     const box = make("input");
     box.type = "checkbox";
     box.dataset.fk = "x|" + node.key;
@@ -1157,6 +1211,12 @@ function fileRow(f, depth, open, nodes) {
   label.title = f.path;
   name.appendChild(label);
   if (st) name.appendChild(markButton(st, key, f.name, () => { ui().openRows.add(key); renderOutline(true); }));
+  else {
+    const fine = make("span", "state done");
+    fine.title = "Nothing unclear in this file";
+    fine.appendChild(icon("done"));
+    name.appendChild(fine);
+  }
   const columns = nodes.filter(n => n.type === "column").length;
   cellDiv(row, "c-kind", columns ? plural(columns, "column") : "Text");
   cellDiv(row, "c-becomes", "");
@@ -1275,12 +1335,12 @@ async function sendKeep() {
   if (failed(result)) { renderChrome(); showMessage("add-error", result ? result.error : FAILED, "Your choice could not be saved."); return; }
   applyScan(result, true);
 }
-async function setColumn(ref, value) {
+async function setColumn(ref, value, byTick) {
   const id = state.current;
   hide("add-error");
   refreshing += 1;
   work(+1);
-  const result = await call("set_column", ref, value);
+  const result = await call("set_column", ref, value, !!byTick);
   state.working -= 1;
   if (id !== state.current) { renderChrome(); return; }
   if (failed(result)) { renderChrome(); renderOutline(true); showMessage("add-error", result ? result.error : FAILED, "The column could not be changed."); return; }
@@ -1372,17 +1432,55 @@ async function changeExtra(next) {
   applyScan(result, true);
   return true;
 }
+// Spot check: the user looks for one value. In no file is the good outcome. Still in a file: it is replaced, and the
+// files are read again (with the local AI, if it was off), because the first reading missed it.
+function spotSay(kind, words) {
+  const box = $("spot-result");
+  box.className = "note " + (kind === "good" ? "good-text" : "warn-text");
+  box.replaceChildren(icon(kind === "good" ? "done" : "mark"), make("span", "", " " + words));
+  box.style.display = "flex"; box.style.alignItems = "center"; box.style.gap = "4px";
+  box.classList.remove("hidden");
+}
 async function addTerm() {
+  if (adding) return;
   const input = $("add-term");
   const term = input.value.trim();
+  hide("spot-result");
   if (!term) return;
   if (term.length < 2) { showMessage("add-error", "Please enter at least 2 characters.", "A little longer, please."); return; }
-  if (ui().extra.some(t => t.toLowerCase() === term.toLowerCase())) { showMessage("add-error", "This is already on your list.", "Already added."); return; }
-  if (await changeExtra([...ui().extra, term])) { input.value = ""; input.focus(); }
+  if (ui().extra.some(t => t.toLowerCase() === term.toLowerCase())) { spotSay("good", `“${term}” is already replaced everywhere.`); return; }
+  clearTimeout(keepTimer);  // this request carries what is kept as well
+  const id = state.current;
+  hide("add-error");
+  adding = true;
+  input.disabled = $("add-button").disabled = true;
+  refreshing += 1;
+  work(+1);
+  const result = await withStatus("Looking in every file", "spot_check", [...ui().keep], ui().extra, term);
+  adding = false;
+  input.disabled = $("add-button").disabled = false;
+  state.working -= 1;
+  if (id !== state.current) { renderChrome(); return; }
+  if (failed(result)) { renderChrome(); showMessage("add-error", result ? result.error : FAILED); return; }
+  const spot = result.spot || {};
+  if (spot.found) {
+    ui().extra = [...ui().extra, term];
+    if (spot.ai_now) $("ai").checked = true;
+  }
+  applyScan(result, true);
+  input.value = "";
+  input.focus();
+  if (!spot.found) spotSay("good", spot.already ? `“${term}” was already replaced. Nothing was missed.` : `“${term}” is in none of your files. Good.`);
+  else {
+    const again = spot.ai_now ? "Privatier read all files again, now with the local AI."
+      : spot.ai_used ? "All files were read again with the local AI. Look through the other values too."
+      : "The local AI is not set up, so look through the other values too.";
+    spotSay("warn", `“${term}” was still in ${plural(spot.places, "place")}. It is now replaced everywhere. ${again}`);
+  }
 }
 $("add-button").addEventListener("click", addTerm);
 $("add-term").addEventListener("keydown", e => { if (e.key === "Enter") addTerm(); });
-$("add-term").addEventListener("input", () => hide("add-error"));
+$("add-term").addEventListener("input", () => { hide("add-error"); hide("spot-result"); });
 
 // --------------------------------------------------------------- toolbar: protection and open points
 function allNotes() { return [...state.scan.notes, ...(state.scan.used_ai ? [] : [NO_AI])]; }
@@ -1392,18 +1490,20 @@ function renderToolbar() {
   text($("protection-name"), ` · ${lv.name}`);
   $("protection-button").setAttribute("aria-label", `Protection: level ${lv.number}, ${lv.name}. Change it.`);
   show("protection-button", true);
-  show("toolbar-sep", true);
   const total = state.points.size;
   const open = unanswered();
   const notes = allNotes().length;
   const b = $("points-button");
-  show("points-button", total > 0 || notes > 0);
+  show("points-button", true);
   b.classList.toggle("open", open > 0);
-  $("points-icon").setAttribute("href", open ? "#i-mark" : total ? "#i-done" : "#i-info");
-  text($("points-count"), open ? String(open) : "");
-  const words = open ? `${plural(open, "open point")}: what the data does not settle` : total ? "All open points are answered" : "Good to know";
+  $("points-icon").setAttribute("href", open ? "#i-mark" : "#i-done");
+  text($("points-count"), open ? plural(open, "issue") : "No issues");
+  const words = open ? `${plural(open, "issue")}: what the data does not settle. Click to see them.`
+    : total ? "All issues are settled. Click to see them again."
+    : notes ? "No issues. Click for a few things good to know." : "No issues: nothing unclear was found.";
   b.title = words;
   b.setAttribute("aria-label", words);
+  b.disabled = !total && !notes;
 }
 $("protection-button").addEventListener("click", () => openSetup("protection"));
 $("points-button").addEventListener("click", () => openSetup("points"));
@@ -1638,7 +1738,7 @@ function renderPoints() {
     list.appendChild(block);
   });
   const notes = allNotes();
-  text($("points-title"), points.length ? "Open points" : "Good to know");
+  text($("points-title"), points.length ? "Issues" : "Good to know");
   show("points-intro", points.length > 0);
   show("points-list", points.length > 0);
   show("notes-title", points.length > 0 && notes.length > 0);
@@ -1673,7 +1773,7 @@ function openCopy() {
   if (kept) parts.push(`${plural(kept, "value")} kept as written`);
   if (ui().extra.length) parts.push(`${plural(ui().extra.length, "word")} added by you`);
   const open = unanswered();
-  if (open) parts.push(`${plural(open, "open point")} not answered: what is unclear stays apart`);
+  if (open) parts.push(`${plural(open, "issue")} not settled: what is unclear stays apart`);
   text($("copy-line"), parts.join(" · ") + ".");
   hide("copy-error");
   stage("copy", "form");
@@ -1758,9 +1858,42 @@ function openRestore() {
   hide("restore-error");
   renderRestore();
   stage("restore", state.scan.has_key ? "form" : "nokey");
-  openSheet("restore");
 }
-$("restore-button").addEventListener("click", openRestore);
+// The switch at the top: make a copy, or put the real values back. Restoring has its own view, not a sheet.
+function setMode(mode) {
+  if (state.mode === mode || state.locked || !state.scan || state.busy || state.sheet) return;
+  closePopover();
+  state.mode = mode;
+  if (mode === "restore") openRestore();
+  renderChrome();
+  const target = mode === "restore" ? document.querySelector("#restore-view [data-stage]:not(.hidden) button.primary, #restore-view [data-stage]:not(.hidden) button") : $("mode-copy");
+  if (target && mode === "restore") target.focus();
+}
+$("mode-copy").addEventListener("click", () => setMode("copy"));
+$("mode-restore").addEventListener("click", () => setMode("restore"));
+$("mode").addEventListener("keydown", e => {
+  if (!["ArrowLeft", "ArrowRight"].includes(e.key)) return;
+  e.preventDefault();
+  setMode(e.key === "ArrowRight" ? "restore" : "copy");
+  $(state.mode === "restore" ? "mode-restore" : "mode-copy").focus();
+});
+// The restore steps live in the main area. Their Cancel and Done buttons start over, or go back to making a copy.
+(function moveRestore() {
+  const card = $("sheet-restore");
+  card.classList.remove("sheet", "hidden");
+  card.classList.add("restore-card");
+  card.removeAttribute("aria-modal");
+  card.setAttribute("role", "region");
+  $("restore-view").appendChild(card);
+  card.addEventListener("click", e => {
+    if (!e.target.closest("[data-close]") || state.locked) return;
+    if (!state.scan || !state.scan.has_key) { setMode("copy"); return; }
+    openRestore();
+  });
+  card.addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.target.id === "restore-password") { e.preventDefault(); $("restore-go").click(); }
+  });
+})();
 async function setRestorePaths(paths) {
   hide("restore-error");
   const info = await call("restore_info", paths);
@@ -1777,7 +1910,7 @@ async function chooseResults(kind) {
 }
 $("restore-folder").addEventListener("click", () => chooseResults("folder"));
 $("restore-files").addEventListener("click", () => chooseResults("files"));
-$("restore-change").addEventListener("click", () => { state.restore.paths = []; state.restore.info = null; hide("restore-error"); renderRestore(); focusSheet(); });
+$("restore-change").addEventListener("click", () => { state.restore.paths = []; state.restore.info = null; hide("restore-error"); renderRestore(); $("restore-folder").focus(); });
 $("restore-password").addEventListener("input", renderRestore);
 $("restore-go").addEventListener("click", async () => {
   const r = state.restore;
@@ -1786,8 +1919,10 @@ $("restore-go").addEventListener("click", async () => {
   hide("restore-error");
   stage("restore", "working");
   state.locked = true;
+  renderChrome();
   const result = await withStatus("Putting the real values back", "restore", r.paths, password);
   state.locked = false;
+  renderChrome();
   $("restore-password").value = "";
   renderRestore();
   if (result.error) {
@@ -1817,7 +1952,7 @@ $("restore-finder").addEventListener("click", () => call("show_in_finder", state
 
 // --------------------------------------------------------------- dropping, keys, behaving like an app
 // The whole window takes a drop. The window tells the page what was dropped, with full paths.
-function restoreFormOpen() { return state.sheet === "restore" && !$("sheet-restore").querySelector('[data-stage="form"]').classList.contains("hidden"); }
+function restoreFormOpen() { return state.mode === "restore" && !state.sheet && !$("sheet-restore").querySelector('[data-stage="form"]').classList.contains("hidden"); }
 function dropWords() {
   if (restoreFormOpen()) return "Drop the results here";
   if (state.busy || state.sheet) return "";
@@ -1849,6 +1984,80 @@ document.addEventListener("keydown", e => {
   const key = e.key.toLowerCase();
   if (key === "o") { e.preventDefault(); addProject(); }
   if (key === "f") { e.preventDefault(); if (state.scan && !state.busy && !state.sheet) { $("filter").focus(); $("filter").select(); } }
+});
+
+// Widths: the edge of a pane or of a column heading can be dragged. A double click puts all widths back as usual.
+const WIDTHS = { side: ["--side-w", 150, 360], files: ["--files-w", 160, 560], kind: ["--kind-w", 70, 320], becomes: ["--becomes-w", 80, 380] };
+function widthNow(name) {
+  const set = getComputedStyle(document.documentElement).getPropertyValue(WIDTHS[name][0]).trim();
+  if (set) return parseFloat(set);
+  const el = { side: ".sidebar", files: ".files", kind: ".outline-head > div:nth-child(2)", becomes: ".outline-head > div:nth-child(3)" }[name];
+  return document.querySelector(el).getBoundingClientRect().width;
+}
+const NAME_ROOM = 150;  // the Column part, with the names, never gets narrower than this by dragging
+function setWidth(name, px) {
+  const [prop, low] = WIDTHS[name];
+  let high = WIDTHS[name][2];
+  const detail = document.querySelector(".detail");
+  if (detail.offsetWidth) {  // the panes are on screen: a pane or column may only take room the names can spare
+    const cols = [...document.querySelector(".outline-head").children].slice(1).reduce((n, c) => n + c.offsetWidth, 0) + 20;
+    const spare = detail.offsetWidth - cols - NAME_ROOM;
+    let room = spare;
+    if ((name === "side" || name === "files") && px - widthNow(name) > room) {
+      // Wider than the names can spare: Becomes, then Kind, give up width first, down to their smallest.
+      for (const col of ["becomes", "kind"]) {
+        const need = px - widthNow(name) - room;
+        if (need <= 0) break;
+        const now = widthNow(col), give = Math.min(need, now - WIDTHS[col][1]);
+        if (give > 0) { document.documentElement.style.setProperty(WIDTHS[col][0], Math.round(now - give) + "px"); room += give; }
+      }
+    }
+    if (name === "side" || name === "files" || name === "kind") high = Math.min(high, Math.max(low, widthNow(name) + room));
+  }
+  document.documentElement.style.setProperty(prop, Math.round(Math.min(high, Math.max(low, px))) + "px");
+}
+function saveWidths() {
+  try {
+    const saved = {};
+    for (const [name, [prop]] of Object.entries(WIDTHS)) { const v = document.documentElement.style.getPropertyValue(prop); if (v) saved[name] = parseFloat(v); }
+    localStorage.setItem("privatier-widths", JSON.stringify(saved));
+  } catch (e) { /* widths are a convenience: without storage they are simply not remembered */ }
+}
+try {
+  const saved = JSON.parse(localStorage.getItem("privatier-widths") || "{}");
+  for (const [name, px] of Object.entries(saved)) if (WIDTHS[name] && typeof px === "number") setWidth(name, px);
+} catch (e) { /* nothing remembered */ }
+document.addEventListener("mousedown", e => {
+  const grip = e.target.closest("[data-grip]");
+  if (!grip || e.button !== 0) return;
+  e.preventDefault();
+  const name = grip.dataset.grip;
+  const startX = e.clientX;
+  const start = widthNow(name);
+  const startKind = name === "becomes" ? widthNow("kind") : 0;
+  grip.classList.add("on");
+  document.body.style.cursor = "col-resize";
+  const move = ev => {
+    const dx = ev.clientX - startX;
+    if (name === "side" || name === "files") setWidth(name, start + dx);
+    else if (name === "kind") setWidth("kind", start - dx);  // the edge left of Kind: the Column part gives or takes
+    else { setWidth("becomes", start - dx); setWidth("kind", startKind + dx); }  // the edge between Kind and Becomes
+  };
+  const up = () => {
+    document.removeEventListener("mousemove", move);
+    document.removeEventListener("mouseup", up);
+    grip.classList.remove("on");
+    document.body.style.cursor = "";
+    saveWidths();
+  };
+  document.addEventListener("mousemove", move);
+  document.addEventListener("mouseup", up);
+});
+document.addEventListener("dblclick", e => {
+  const grip = e.target.closest("[data-grip]");
+  if (!grip) return;
+  for (const [prop] of Object.values(WIDTHS)) document.documentElement.style.removeProperty(prop);  // all back to the usual widths
+  saveWidths();
 });
 
 // The switch for the local AI decides how the files are read, so the open project is read again.

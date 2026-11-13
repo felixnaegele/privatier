@@ -61,11 +61,14 @@ class Api:
     def status(self) -> str:
         return self._session.status
 
-    def set_column(self, ref: list, value=None) -> dict:
-        return self._safely(self._session.set_column, ref, value)
+    def set_column(self, ref: list, value=None, by_tick: bool = False) -> dict:
+        return self._safely(self._session.set_column, ref, value, by_tick)
 
     def review(self, keep: list, extra: list) -> dict:
         return self._safely(self._session.review, keep, extra)
+
+    def spot_check(self, keep: list, extra: list, term: str) -> dict:
+        return self._safely(self._session.spot_check, keep, extra, term)
 
     def preview(self, answers: dict, ticked: list, kept_text: list) -> dict:
         return self._safely(self._session.preview, answers, ticked, kept_text)
@@ -115,7 +118,7 @@ def _choose_folder() -> list[str] | None:
             panel.setCanChooseDirectories_(True)
             panel.setCanCreateDirectories_(True)
             panel.setAllowsMultipleSelection_(False)
-            panel.setMessage_("Choose the folder of one project. Privatier can only work inside the folders you add.")
+            panel.setMessage_("Choose the folder of one project.")
             panel.setPrompt_("Add Folder")
             if panel.runModal() == AppKit.NSModalResponseOK:
                 result["paths"] = [str(url.path()) for url in panel.URLs()]

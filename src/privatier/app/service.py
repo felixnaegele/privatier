@@ -150,6 +150,7 @@ class AppSession:
         self.use_ai = False
         self.choice = Review()
         self.column_choices: dict[tuple, str] = {}  # what the user said a column is
+        self.ticked_columns: set[tuple] = set()  # columns the user ticked to replace: every value becomes a code
 
     # -- the list of project folders -----------------------------------------
     def projects(self) -> list[dict]:
@@ -212,13 +213,52 @@ class AppSession:
         self.choice = self._review(keep, extra)
         return self._read()
 
-    def set_column(self, ref, value) -> dict:
-        """The user says what a column is (a name, an ID, not identifying ...). None takes the choice back."""
+    def spot_check(self, keep: list, extra: list, term: str) -> dict:
+        """The user looks for one value Privatier may have missed. Not in any file: good, nothing changes. Already
+        replaced: nothing was missed. Found and still there: it is added to the words to replace, and because the
+        first reading missed it, the files are read again, with the local AI if it was off."""
+        if self.folder is None:
+            return {"error": "Please choose a project first."}
+        term = str(term or "").strip()
+        if len(term) < MIN_TERM_LENGTH:
+            return {"error": f"Please enter at least {MIN_TERM_LENGTH} characters."}
+        before = list(extra or [])
+        self.choice = self._review(keep, before + [term])
+        result = self._read()
+        hit = next(
+            (f for f in result["findings"] if f["source"] == "added" and f["value"].lower() == term.lower()), None
+        )
+        places = hit["count"] if hit else 0
+        if not places:
+            # The word changes nothing, so it does not go on the list. The files as read stay valid.
+            self.choice = self._review(keep, before)
+            result["findings"] = [f for f in result["findings"] if f is not hit]
+            result["spot"] = {"term": term, "found": False, "already": bool(hit and hit["already_replaced"])}
+            return result
+        ai_now = False
+        if not self.use_ai and ai_model_ready():
+            self.status = "Loading the local AI model"
+            try:
+                with offline():
+                    self.detectors = build_detectors(True)
+            finally:
+                self.status = ""
+            self.use_ai = ai_now = True
+            result = self._read()
+        result["spot"] = {"term": term, "found": True, "places": places, "ai_now": ai_now, "ai_used": result["used_ai"]}
+        return result
+
+    def set_column(self, ref, value, by_tick: bool = False) -> dict:
+        """The user says what a column is (a name, an ID, not identifying ...). None takes the choice back.
+        by_tick: the user ticked Replace on a column nothing was done to, so every value becomes a code."""
         if self.folder is None:
             return {"error": "Please choose a project first."}
         key = _ref(ref)
+        self.ticked_columns.discard(key)
         if value in _CHOICE_LABELS:
             self.column_choices[key] = str(value)
+            if by_tick and value == "ID":
+                self.ticked_columns.add(key)
         else:
             self.column_choices.pop(key, None)
         return self._read()
@@ -299,8 +339,7 @@ class AppSession:
             })
         return rows
 
-    @staticmethod
-    def _outline_json(scan) -> dict:
+    def _outline_json(self, scan) -> dict:
         """Each file as its columns (tables) and kinds of findings (text), with the values that sit there."""
         asked_columns: dict[tuple, list[str]] = {}
         asked_findings: dict[str, list[str]] = {}
@@ -329,12 +368,14 @@ class AppSession:
                         {
                             "ref": list(c.ref), "header": c.header,
                             "kind": "KEEP" if c.kind == "PLAIN" else c.kind,
-                            "kind_label": _COLUMN_KINDS.get(c.kind, c.kind.replace("_", " ").capitalize()),
-                            "becomes": _column_becomes(c),
+                            "kind_label": "Replaced by you" if tuple(c.ref) in self.ticked_columns
+                            else _COLUMN_KINDS.get(c.kind, c.kind.replace("_", " ").capitalize()),
+                            "becomes": "a code for each value" if tuple(c.ref) in self.ticked_columns else _column_becomes(c),
                             "values": values(c.values),
                             "total_values": c.total_values,
                             "choices": [{"value": v, "label": _CHOICE_LABELS[v]} for v in c.choices if v in _CHOICE_LABELS],
                             "decided": c.decided,
+                            "tick": tuple(c.ref) in self.ticked_columns,
                             "questions": asked_columns.get(tuple(c.ref), []),
                         }
                         for c in table.columns
