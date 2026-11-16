@@ -64,7 +64,7 @@ A project protected with the command line or an earlier version has its key next
 (`Studie_privatier/key.vault`). To keep the same codes in the app, make one copy in the app first (this creates the
 folders), then replace `Studie/Privatier/Key - keep private/key.vault` by the old `key.vault`.
 
-From the source code, the app starts with `Privatier.command` or `.venv/bin/python -m privatier.app`. Started this
+From the source code, the app starts with `.venv/bin/python -m privatier.app`. Started this
 way it is not sandboxed.
 
 ## Privacy levels

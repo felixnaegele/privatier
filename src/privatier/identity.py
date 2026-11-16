@@ -597,9 +597,6 @@ class Registry:
     def person_for_record(self, record: Record) -> Person | None:
         return self._record_owner.get(record.identity)
 
-    def person_of_token(self, token: str) -> Person | None:
-        return self._by_token.get(token)
-
     def _evidence_match(self, people: list[Person], births: list[BirthDate], ids: set[str]) -> Person | None:
         found = [
             p

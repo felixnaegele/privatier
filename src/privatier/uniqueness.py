@@ -460,10 +460,6 @@ class FolderCheck:
     def worst(self) -> TableCheck | None:
         return max(self.checked, key=lambda t: (t.percent, t.percent_small), default=None)
 
-    @property
-    def everyone_in_a_group(self) -> bool:
-        return bool(self.checked) and all(t.in_small_group == 0 for t in self.checked)
-
 
 def _check_table(table: Table, plan: Plan | None, extra: set[ColumnRef]) -> tuple[TableCheck, dict]:
     if table.problem:
